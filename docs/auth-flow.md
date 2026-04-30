@@ -18,8 +18,10 @@ Production login requires `telegram_chat_id` on the user record. Users can link 
 
 1. Open the Telegram bot.
 2. Send `/start`.
-3. Send the same phone number that exists in `users.phone`, for example `+998...`, or share the Telegram contact.
+3. Press the Telegram contact button to share the phone number from Telegram.
 4. The Telegram webhook stores `message.chat.id` in `users.telegram_chat_id`.
+
+Typed phone numbers are intentionally rejected. This keeps linking explicit and reduces formatting mistakes.
 
 If Telegram is not linked, `POST /api/auth/start` does not create a usable production login step. It returns `telegram_not_linked`, and the login form points the user to the bot configured by `TELEGRAM_BOT_USERNAME`.
 

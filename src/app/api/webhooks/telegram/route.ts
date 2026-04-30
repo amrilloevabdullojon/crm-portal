@@ -12,6 +12,7 @@ type TelegramMessage = {
   text?: string;
   contact?: {
     phone_number?: string;
+    user_id?: number | string;
   };
   chat?: {
     id?: number | string;
@@ -60,15 +61,39 @@ function getPhoneFromMessage(message: TelegramMessage | null) {
   const contactPhone = message?.contact?.phone_number;
   if (contactPhone) return normalizePhone(contactPhone);
 
-  const text = message?.text?.trim() ?? "";
-  if (!text || text.startsWith("/")) return "";
-
-  return normalizePhone(text);
+  return "";
 }
 
-async function reply(chatId: string, text: string) {
+function isOwnTelegramContact(message: TelegramMessage) {
+  const contactUserId = message.contact?.user_id;
+  const senderUserId = message.from?.id;
+
+  if (!contactUserId || !senderUserId) return true;
+
+  return String(contactUserId) === String(senderUserId);
+}
+
+async function replyWithContactButton(chatId: string, text: string) {
   try {
-    await sendTelegramMessage(chatId, text);
+    await sendTelegramMessage(chatId, text, {
+      replyMarkup: {
+        keyboard: [[{ text: "Поделиться номером", request_contact: true }]],
+        resize_keyboard: true,
+        one_time_keyboard: true,
+      },
+    });
+  } catch (error) {
+    console.warn("Telegram contact prompt failed:", error);
+  }
+}
+
+async function replyAndRemoveKeyboard(chatId: string, text: string) {
+  try {
+    await sendTelegramMessage(chatId, text, {
+      replyMarkup: {
+        remove_keyboard: true,
+      },
+    });
   } catch (error) {
     console.warn("Telegram reply failed:", error);
   }
@@ -128,17 +153,33 @@ export async function POST(request: Request) {
 
     const text = message.text?.trim() ?? "";
     if (text.startsWith("/start")) {
-      await reply(
+      await replyWithContactButton(
         chatId,
-        "Отправьте номер телефона в формате +998... или нажмите кнопку Telegram 'Поделиться контактом'.",
+        "Нажмите кнопку ниже, чтобы поделиться номером телефона из Telegram.",
       );
       await updateIntegrationEvent({ id: event.id, status: "processed" });
       return NextResponse.json({ ok: true, action: "prompted_for_phone" });
     }
 
+    if (!message.contact) {
+      await replyWithContactButton(chatId, "Номер принимается только через кнопку ниже.");
+      await updateIntegrationEvent({ id: event.id, status: "ignored", errorMessage: "Contact button required." });
+      return NextResponse.json({ ok: true, ignored: true, reason: "contact_required" });
+    }
+
+    if (!isOwnTelegramContact(message)) {
+      await replyWithContactButton(chatId, "Отправьте свой номер через кнопку ниже, не чужой контакт.");
+      await updateIntegrationEvent({
+        id: event.id,
+        status: "ignored",
+        errorMessage: "Contact does not belong to sender.",
+      });
+      return NextResponse.json({ ok: true, ignored: true, reason: "foreign_contact" });
+    }
+
     const phone = getPhoneFromMessage(message);
     if (!phone) {
-      await reply(chatId, "Не понял номер. Отправьте номер телефона в формате +998...");
+      await replyWithContactButton(chatId, "Не удалось прочитать номер. Нажмите кнопку ниже еще раз.");
       await updateIntegrationEvent({ id: event.id, status: "ignored", errorMessage: "Missing phone." });
       return NextResponse.json({ ok: true, ignored: true, reason: "missing_phone" });
     }
@@ -146,12 +187,18 @@ export async function POST(request: Request) {
     const user = await linkTelegramChat({ phone, chatId });
 
     if (!user) {
-      await reply(chatId, "Этот номер пока не найден в DMED Portal. Проверьте номер или обратитесь к менеджеру.");
+      await replyWithContactButton(
+        chatId,
+        "Этот номер пока не найден в DMED Portal. Проверьте номер или обратитесь к менеджеру.",
+      );
       await updateIntegrationEvent({ id: event.id, status: "ignored", errorMessage: "User phone not found." });
       return NextResponse.json({ ok: true, ignored: true, reason: "user_not_found" });
     }
 
-    await reply(chatId, `Telegram привязан к DMED Portal для номера ${user.phone}. Теперь коды входа будут приходить сюда.`);
+    await replyAndRemoveKeyboard(
+      chatId,
+      `Telegram привязан к DMED Portal для номера ${user.phone}. Теперь коды входа будут приходить сюда.`,
+    );
     await updateIntegrationEvent({ id: event.id, status: "processed" });
 
     return NextResponse.json({

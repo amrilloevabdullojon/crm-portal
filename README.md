@@ -107,7 +107,7 @@ Users must link Telegram before production login can deliver one-time codes:
 
 1. Open the bot.
 2. Send `/start`.
-3. Send the same phone number stored in `users.phone`.
+3. Press the Telegram button to share the phone number.
 
 The app stores the Telegram chat id in `users.telegram_chat_id`.
 If a user tries to log in before linking Telegram, the login form shows a link to the bot from `TELEGRAM_BOT_USERNAME`.
