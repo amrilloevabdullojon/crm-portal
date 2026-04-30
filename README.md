@@ -1,36 +1,119 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# DMED Portal
 
-## Getting Started
+Next.js service that replaces the legacy Google Apps Script flow for clinic onboarding.
 
-First, run the development server:
+## What It Does
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- receives amoCRM lead status webhooks;
+- creates clinics, client users, and onboarding modules in Supabase;
+- creates clinic folders in Google Drive;
+- lets clients upload module files;
+- lets admins accept modules or request revisions.
+
+Production is deployed on Vercel:
+
+```text
+https://dmed-portal.vercel.app
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Stack
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- Next.js App Router
+- Supabase Postgres
+- Google Drive API
+- Telegram Bot API
+- amoCRM API
+- Vercel
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Local Setup
 
-## Learn More
+```bash
+npm install
+cp .env.example .env.local
+npm run check:env
+npm run dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+Open:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```text
+http://localhost:3000
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Environment Variables
 
-## Deploy on Vercel
+Use `.env.example` as the template. Never commit `.env.local`.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Important production variables:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `AUTH_SESSION_SECRET`
+- `TELEGRAM_BOT_TOKEN`
+- `AMOCRM_DOMAIN`
+- `AMOCRM_ACCESS_TOKEN`
+- `AMOCRM_WEBHOOK_SECRET`
+- `AMOCRM_TARGET_STATUS_IDS`
+- `GOOGLE_DRIVE_ROOT_FOLDER_ID`
+- `GOOGLE_SERVICE_ACCOUNT_EMAIL`
+- `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY`
+
+Current target statuses:
+
+```text
+MIS -> Заявка: 84088646
+Test -> Сбор: 85285282
+```
+
+## Supabase
+
+Run migrations in order from:
+
+```text
+supabase/migrations
+```
+
+The schema includes:
+
+- `users`
+- `clinics`
+- `clinic_users`
+- `module_templates`
+- `clinic_modules`
+- `uploaded_files`
+- `activity_log`
+- `integration_events`
+- `auth_challenges`
+
+## amoCRM Webhook
+
+Production endpoint:
+
+```text
+https://dmed-portal.vercel.app/api/webhooks/amo?secret=<AMOCRM_WEBHOOK_SECRET>
+```
+
+The webhook should listen to lead status changes.
+
+Docs:
+
+- `docs/stages/03-amocrm-webhook.md`
+
+## Useful Commands
+
+```bash
+npm run check:env
+npm run lint
+npm run build
+npm run import:legacy -- --file ./legacy.csv
+```
+
+## Deployment
+
+The Vercel project is connected to:
+
+```text
+https://github.com/amrilloevabdullojon/crm-portal
+```
+
+Pushes to `main` can be deployed by Vercel Git integration. Production env vars are stored in Vercel as encrypted variables.
