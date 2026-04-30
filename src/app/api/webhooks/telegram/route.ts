@@ -107,10 +107,10 @@ async function linkTelegramChat(input: { phone: string; chatId: string }) {
   const supabase = getSupabaseAdminClient();
   const { data: user, error: userError } = await supabase
     .from("users")
-    .select("id,name,phone")
+    .select("id,name,phone,role")
     .eq("phone", input.phone)
     .eq("is_active", true)
-    .maybeSingle<{ id: number; name: string | null; phone: string }>();
+    .maybeSingle<{ id: number; name: string | null; phone: string; role: string }>();
 
   if (userError) {
     throw new Error(`Telegram user lookup failed: ${userError.message}`);
@@ -129,7 +129,18 @@ async function linkTelegramChat(input: { phone: string; chatId: string }) {
   }
 
   if (linkedUser && linkedUser.id !== user.id) {
-    return { user, conflict: true };
+    if (user.role === "admin") {
+      const { error: unlinkError } = await supabase
+        .from("users")
+        .update({ telegram_chat_id: null })
+        .eq("telegram_chat_id", input.chatId);
+
+      if (unlinkError) {
+        throw new Error(`Telegram chat unlink failed: ${unlinkError.message}`);
+      }
+    } else {
+      return { user, conflict: true };
+    }
   }
 
   const { error: updateError } = await supabase
