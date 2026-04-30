@@ -43,7 +43,7 @@ const groups = [
   },
   {
     name: "Telegram",
-    required: ["TELEGRAM_BOT_TOKEN"],
+    required: ["TELEGRAM_BOT_TOKEN", "TELEGRAM_WEBHOOK_SECRET"],
   },
   {
     name: "amoCRM",
@@ -75,6 +75,7 @@ if (missingTotal > 0) {
   const authSecret = process.env.AUTH_SESSION_SECRET || "";
   const serviceEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || "";
   const privateKey = (process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY || "").replace(/\\n/g, "\n");
+  const telegramWebhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET || "";
 
   if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(supabaseUrl)) {
     console.log("CHECK NEXT_PUBLIC_SUPABASE_URL should look like https://project-ref.supabase.co");
@@ -98,6 +99,11 @@ if (missingTotal > 0) {
 
   if (!privateKey.includes("-----BEGIN PRIVATE KEY-----") || !privateKey.includes("-----END PRIVATE KEY-----")) {
     console.log("CHECK GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY should include private key markers.");
+    formatProblems++;
+  }
+
+  if (telegramWebhookSecret.length < 32) {
+    console.log("CHECK TELEGRAM_WEBHOOK_SECRET should be at least 32 characters.");
     formatProblems++;
   }
 

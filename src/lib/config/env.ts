@@ -23,7 +23,7 @@ export const envGroups: EnvGroup[] = [
   },
   {
     name: "Telegram",
-    required: ["TELEGRAM_BOT_TOKEN"],
+    required: ["TELEGRAM_BOT_TOKEN", "TELEGRAM_WEBHOOK_SECRET"],
   },
   {
     name: "amoCRM",

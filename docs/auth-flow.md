@@ -12,6 +12,27 @@ The first auth version uses phone-based one-time codes.
 6. `POST /api/auth/verify` validates the code and sets an httpOnly signed session cookie.
 7. `/portal`, `/admin`, portal API, upload API, and admin APIs require this cookie.
 
+## Telegram linking
+
+Production login requires `telegram_chat_id` on the user record. Users can link Telegram through the bot:
+
+1. Open the Telegram bot.
+2. Send `/start`.
+3. Send the same phone number that exists in `users.phone`, for example `+998...`, or share the Telegram contact.
+4. The Telegram webhook stores `message.chat.id` in `users.telegram_chat_id`.
+
+Webhook endpoint:
+
+```text
+POST /api/webhooks/telegram
+```
+
+The route validates Telegram's `x-telegram-bot-api-secret-token` header against:
+
+```text
+TELEGRAM_WEBHOOK_SECRET=
+```
+
 ## Demo users
 
 When Supabase env vars are missing, the app uses in-memory demo users:
@@ -28,7 +49,7 @@ AUTH_SESSION_SECRET=
 NEXT_PUBLIC_SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
 TELEGRAM_BOT_TOKEN=
+TELEGRAM_WEBHOOK_SECRET=
 ```
 
 `AUTH_SESSION_SECRET` must be a long random string. It signs session cookies and challenge code hashes.
-

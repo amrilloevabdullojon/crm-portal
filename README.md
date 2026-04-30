@@ -50,6 +50,7 @@ Important production variables:
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `AUTH_SESSION_SECRET`
 - `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_WEBHOOK_SECRET`
 - `AMOCRM_DOMAIN`
 - `AMOCRM_ACCESS_TOKEN`
 - `AMOCRM_WEBHOOK_SECRET`
@@ -98,6 +99,16 @@ The webhook should listen to lead status changes.
 Docs:
 
 - `docs/stages/03-amocrm-webhook.md`
+
+## Telegram Login
+
+Users must link Telegram before production login can deliver one-time codes:
+
+1. Open the bot.
+2. Send `/start`.
+3. Send the same phone number stored in `users.phone`.
+
+The app stores the Telegram chat id in `users.telegram_chat_id`.
 
 ## Useful Commands
 
