@@ -7,6 +7,7 @@ import { requireRole } from "@/lib/auth/guards";
 export async function acceptModuleAction(formData: FormData) {
   const session = await requireRole(["admin", "manager"]);
   const moduleId = Number(formData.get("moduleId"));
+  const clinicId = Number(formData.get("clinicId"));
 
   if (!Number.isFinite(moduleId)) {
     throw new Error("Invalid module id.");
@@ -15,12 +16,14 @@ export async function acceptModuleAction(formData: FormData) {
   await updateModuleStatus({ moduleId, status: "accepted", acceptedByUserId: session.userId });
   await logModuleActivity({ moduleId, actorUserId: session.userId, action: "module.accepted" });
   revalidatePath("/admin");
+  if (Number.isFinite(clinicId)) revalidatePath(`/admin/clinics/${clinicId}`);
   revalidatePath("/portal");
 }
 
 export async function requestRevisionAction(formData: FormData) {
   const session = await requireRole(["admin", "manager"]);
   const moduleId = Number(formData.get("moduleId"));
+  const clinicId = Number(formData.get("clinicId"));
   const comment = String(formData.get("comment") ?? "").trim();
 
   if (!Number.isFinite(moduleId)) {
@@ -39,5 +42,6 @@ export async function requestRevisionAction(formData: FormData) {
     details: { comment },
   });
   revalidatePath("/admin");
+  if (Number.isFinite(clinicId)) revalidatePath(`/admin/clinics/${clinicId}`);
   revalidatePath("/portal");
 }

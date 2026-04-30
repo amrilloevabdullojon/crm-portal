@@ -118,6 +118,20 @@ async function linkTelegramChat(input: { phone: string; chatId: string }) {
 
   if (!user) return null;
 
+  const { data: linkedUser, error: linkedUserError } = await supabase
+    .from("users")
+    .select("id")
+    .eq("telegram_chat_id", input.chatId)
+    .maybeSingle<{ id: number }>();
+
+  if (linkedUserError) {
+    throw new Error(`Telegram chat lookup failed: ${linkedUserError.message}`);
+  }
+
+  if (linkedUser && linkedUser.id !== user.id) {
+    return { user, conflict: true };
+  }
+
   const { error: updateError } = await supabase
     .from("users")
     .update({ telegram_chat_id: input.chatId })
@@ -127,7 +141,7 @@ async function linkTelegramChat(input: { phone: string; chatId: string }) {
     throw new Error(`Telegram chat link failed: ${updateError.message}`);
   }
 
-  return user;
+  return { user, conflict: false };
 }
 
 export async function POST(request: Request) {
@@ -184,9 +198,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, ignored: true, reason: "missing_phone" });
     }
 
-    const user = await linkTelegramChat({ phone, chatId });
+    const linkResult = await linkTelegramChat({ phone, chatId });
 
-    if (!user) {
+    if (!linkResult) {
       await replyWithContactButton(
         chatId,
         "Этот номер пока не найден в DMED Portal. Проверьте номер или обратитесь к менеджеру.",
@@ -195,16 +209,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, ignored: true, reason: "user_not_found" });
     }
 
+    if (linkResult.conflict) {
+      await replyAndRemoveKeyboard(
+        chatId,
+        "Этот Telegram уже привязан к другому пользователю DMED Portal. Обратитесь к менеджеру, чтобы сменить привязку.",
+      );
+      await updateIntegrationEvent({ id: event.id, status: "ignored", errorMessage: "Telegram chat already linked." });
+      return NextResponse.json({ ok: true, ignored: true, reason: "telegram_already_linked" });
+    }
+
     await replyAndRemoveKeyboard(
       chatId,
-      `Telegram привязан к DMED Portal для номера ${user.phone}. Теперь коды входа будут приходить сюда.`,
+      `Telegram привязан к DMED Portal для номера ${linkResult.user.phone}. Теперь коды входа будут приходить сюда.`,
     );
     await updateIntegrationEvent({ id: event.id, status: "processed" });
 
     return NextResponse.json({
       ok: true,
       action: "telegram_linked",
-      userId: user.id,
+      userId: linkResult.user.id,
     });
   } catch (error) {
     const messageText = error instanceof Error ? error.message : "Unknown Telegram webhook error.";

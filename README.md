@@ -64,7 +64,6 @@ Current target statuses:
 
 ```text
 MIS -> Заявка: 84088646
-Test -> Сбор: 85285282
 ```
 
 ## Supabase
@@ -111,6 +110,15 @@ Users must link Telegram before production login can deliver one-time codes:
 
 The app stores the Telegram chat id in `users.telegram_chat_id`.
 If a user tries to log in before linking Telegram, the login form shows a link to the bot from `TELEGRAM_BOT_USERNAME`.
+
+## Admin
+
+Admin users can use:
+
+- `/admin` for clinic overview, module queue, and recent events;
+- `/admin/clinics/<id>` for clinic contacts, files, and module actions;
+- `/admin/events` for integration monitoring;
+- `/api/admin/events` for the same event list as JSON.
 
 ## Useful Commands
 

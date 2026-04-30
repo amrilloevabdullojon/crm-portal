@@ -13,19 +13,15 @@ The webhook only processes leads when the amoCRM status matches one of the confi
 ```env
 AMOCRM_TARGET_STATUS_ID=84088646
 # or
-AMOCRM_TARGET_STATUS_IDS=84088646,85285282
+AMOCRM_TARGET_STATUS_IDS=84088646
 ```
 
-In the connected account these statuses are:
+In the connected account this status is:
 
 ```text
 Pipeline: MIS
 Status: Заявка
 ID: 84088646
-
-Pipeline: Test
-Status: Сбор
-ID: 85285282
 ```
 
 All other statuses are stored in `integration_events` and marked as `ignored`.

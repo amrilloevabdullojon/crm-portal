@@ -16,6 +16,7 @@ export async function updateModuleStatus(input: UpdateModuleStatusInput) {
   const patch: Record<string, string | number | null> = {
     status: input.status,
     manager_comment: input.managerComment ?? null,
+    updated_at: new Date().toISOString(),
   };
 
   if (input.status === "accepted") {
