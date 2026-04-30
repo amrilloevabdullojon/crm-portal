@@ -50,6 +50,7 @@ Important production variables:
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `AUTH_SESSION_SECRET`
 - `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_BOT_USERNAME`
 - `TELEGRAM_WEBHOOK_SECRET`
 - `AMOCRM_DOMAIN`
 - `AMOCRM_ACCESS_TOKEN`
@@ -109,6 +110,7 @@ Users must link Telegram before production login can deliver one-time codes:
 3. Send the same phone number stored in `users.phone`.
 
 The app stores the Telegram chat id in `users.telegram_chat_id`.
+If a user tries to log in before linking Telegram, the login form shows a link to the bot from `TELEGRAM_BOT_USERNAME`.
 
 ## Useful Commands
 

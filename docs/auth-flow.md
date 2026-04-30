@@ -21,6 +21,8 @@ Production login requires `telegram_chat_id` on the user record. Users can link 
 3. Send the same phone number that exists in `users.phone`, for example `+998...`, or share the Telegram contact.
 4. The Telegram webhook stores `message.chat.id` in `users.telegram_chat_id`.
 
+If Telegram is not linked, `POST /api/auth/start` does not create a usable production login step. It returns `telegram_not_linked`, and the login form points the user to the bot configured by `TELEGRAM_BOT_USERNAME`.
+
 Webhook endpoint:
 
 ```text
@@ -49,6 +51,7 @@ AUTH_SESSION_SECRET=
 NEXT_PUBLIC_SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
 TELEGRAM_BOT_TOKEN=
+TELEGRAM_BOT_USERNAME=
 TELEGRAM_WEBHOOK_SECRET=
 ```
 

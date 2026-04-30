@@ -83,6 +83,10 @@ async function sendChallengeCode(user: AuthUser, code: string) {
   return { delivered: true };
 }
 
+function getTelegramBotUsername() {
+  return process.env.TELEGRAM_BOT_USERNAME || undefined;
+}
+
 export async function startAuthChallenge(rawPhone: string) {
   const phone = normalizePhone(rawPhone);
 
@@ -94,6 +98,23 @@ export async function startAuthChallenge(rawPhone: string) {
 
   if (!user) {
     return { ok: false as const, error: "User was not found." };
+  }
+
+  if (!isDevelopment() && !user.telegram_chat_id) {
+    return {
+      ok: false as const,
+      code: "telegram_not_linked",
+      error: "Telegram is not linked for this phone.",
+      telegramBotUsername: getTelegramBotUsername(),
+    };
+  }
+
+  if (!isDevelopment() && !process.env.TELEGRAM_BOT_TOKEN) {
+    return {
+      ok: false as const,
+      code: "telegram_not_configured",
+      error: "Telegram delivery is not configured.",
+    };
   }
 
   const code = makeCode();
@@ -134,13 +155,25 @@ export async function startAuthChallenge(rawPhone: string) {
     throw new Error(`Auth challenge insert failed: ${error?.message}`);
   }
 
-  const delivery = await sendChallengeCode(user, code);
+  let delivery: Awaited<ReturnType<typeof sendChallengeCode>>;
+  try {
+    delivery = await sendChallengeCode(user, code);
+  } catch (error) {
+    console.warn("Telegram auth code delivery failed:", error);
+    return {
+      ok: false as const,
+      code: "telegram_delivery_failed",
+      error: "Failed to send Telegram login code.",
+      telegramBotUsername: getTelegramBotUsername(),
+    };
+  }
 
   return {
     ok: true as const,
     challengeId: data.id,
     delivered: delivery.delivered,
     devCode: isDevelopment() && !delivery.delivered ? code : undefined,
+    telegramBotUsername: getTelegramBotUsername(),
   };
 }
 

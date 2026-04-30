@@ -10,10 +10,11 @@ export function LoginForm() {
   const searchParams = useSearchParams();
   const next = searchParams.get("next") || "/portal";
   const [step, setStep] = useState<Step>("phone");
-  const [phone, setPhone] = useState("+998000000002");
+  const [phone, setPhone] = useState("");
   const [challengeId, setChallengeId] = useState("");
   const [code, setCode] = useState("");
   const [message, setMessage] = useState("");
+  const [telegramBotUsername, setTelegramBotUsername] = useState("");
   const [loading, setLoading] = useState(false);
 
   async function startChallenge() {
@@ -30,14 +31,26 @@ export function LoginForm() {
     setLoading(false);
 
     if (!response.ok) {
-      setMessage(result.error ?? "Не удалось отправить код.");
+      setTelegramBotUsername(result.telegramBotUsername ?? "");
+      setMessage(
+        result.code === "telegram_not_linked"
+          ? "Telegram не привязан к этому номеру. Откройте бота и отправьте этот номер, затем запросите код снова."
+          : result.error ?? "Не удалось отправить код.",
+      );
       return;
     }
 
     setChallengeId(result.challengeId);
     setCode(result.devCode ?? "");
     setStep("code");
-    setMessage(result.devCode ? `Dev code: ${result.devCode}` : "Код отправлен в Telegram.");
+    setTelegramBotUsername(result.telegramBotUsername ?? "");
+    setMessage(
+      result.devCode
+        ? `Dev code: ${result.devCode}`
+        : result.delivered
+          ? "Код отправлен в Telegram."
+          : "Код создан, но Telegram не подтвердил доставку.",
+    );
   }
 
   async function verifyCode() {
@@ -89,7 +102,21 @@ export function LoginForm() {
         </label>
       ) : null}
 
-      {message ? <p className="text-sm text-[var(--muted)]">{message}</p> : null}
+      {message ? (
+        <div className="space-y-2 text-sm text-[var(--muted)]">
+          <p>{message}</p>
+          {telegramBotUsername ? (
+            <a
+              className="inline-flex h-10 items-center justify-center rounded-md border border-[var(--border)] px-3 font-semibold text-[var(--foreground)]"
+              href={`https://t.me/${telegramBotUsername}`}
+              rel="noreferrer"
+              target="_blank"
+            >
+              Открыть Telegram-бота
+            </a>
+          ) : null}
+        </div>
+      ) : null}
 
       {step === "phone" ? (
         <button

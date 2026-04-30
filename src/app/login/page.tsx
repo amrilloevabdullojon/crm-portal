@@ -7,7 +7,7 @@ export default function LoginPage() {
       <section className="w-full max-w-md rounded-lg border border-[var(--border)] bg-[var(--surface)] p-6 shadow-sm">
         <h1 className="text-2xl font-semibold">Вход в портал</h1>
         <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-          Введите телефон. Если Telegram привязан, код уйдет туда; в dev-режиме код показывается прямо здесь.
+          Введите телефон. Код входа придет в Telegram после привязки номера к боту.
         </p>
         <Suspense>
           <LoginForm />
