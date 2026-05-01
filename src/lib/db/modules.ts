@@ -179,6 +179,17 @@ export async function acceptModule(input: { moduleId: number; actorUserId?: numb
     if (error) {
       throw new Error(`Clinic SLA start failed: ${error.message}`);
     }
+
+    await logModuleActivity({
+      moduleId: input.moduleId,
+      clinicId: context.clinic_id,
+      actorUserId: input.actorUserId,
+      action: "sla.started",
+      details: {
+        moduleName: context.name,
+        reason: "general_info_accepted",
+      },
+    });
   }
 
   let actualCopy: Awaited<ReturnType<typeof copyModuleFileToActualFolder>> | null = null;
@@ -276,6 +287,18 @@ export async function requestModuleRevision(input: {
     if (error) {
       throw new Error(`Clinic SLA reset failed: ${error.message}`);
     }
+
+    await logModuleActivity({
+      moduleId: input.moduleId,
+      clinicId: context.clinic_id,
+      actorUserId: input.actorUserId,
+      action: "sla.reset",
+      details: {
+        moduleName: context.name,
+        reason: "general_info_revision_requested",
+        comment: input.comment,
+      },
+    });
   }
 
   await logModuleActivity({

@@ -128,6 +128,7 @@ Admin users can use:
 
 - `/admin` for clinic overview, module queue, and recent events;
 - `/admin/clinics/<id>` for clinic contacts, files, and module actions;
+- `/admin/sla` for SLA and delayed-review monitoring;
 - `/admin/settings` for integration settings, including amoCRM target status IDs;
 - `/admin/users` for adding clients/managers, changing roles, unlinking Telegram, and clinic access;
 - `/admin/events` for integration monitoring;
