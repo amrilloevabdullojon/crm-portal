@@ -1,5 +1,5 @@
 import { getSupabaseAdminClient, hasSupabaseAdminConfig } from "@/lib/db/supabase";
-import { sendTelegramMessage } from "@/lib/telegram/client";
+import { sendTrackedTelegramMessage } from "@/lib/telegram/client";
 
 type TelegramRecipient = {
   id: number;
@@ -70,6 +70,13 @@ export async function notifyManagers(input: { clinicId: number; text: string }) 
   await Promise.allSettled(
     recipients
       .filter((recipient) => recipient.telegram_chat_id)
-      .map((recipient) => sendTelegramMessage(recipient.telegram_chat_id as string, input.text)),
+      .map((recipient) =>
+        sendTrackedTelegramMessage({
+          chatId: recipient.telegram_chat_id as string,
+          text: input.text,
+          eventType: "manager_notification",
+          details: { clinicId: input.clinicId, recipientUserId: recipient.id },
+        }),
+      ),
   );
 }

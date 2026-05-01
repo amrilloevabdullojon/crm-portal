@@ -13,6 +13,7 @@ import { requireRole } from "@/lib/auth/guards";
 import { copyModuleFileToActualFolder } from "@/lib/google-drive/client";
 import { deliverSlackMessage } from "@/lib/slack/client";
 import { sendAccessRequestToSlack, sendSetupRequestToSlack } from "@/lib/slack/requests";
+import { sendTelegramMessage } from "@/lib/telegram/client";
 
 type AdminClinic = NonNullable<Awaited<ReturnType<typeof getAdminClinic>>>;
 
@@ -231,6 +232,22 @@ export async function retryIntegrationEventAction(formData: FormData) {
 
       revalidatePath("/admin/events");
       successNotice = "Slack событие повторно отправлено.";
+    } else if (event.provider === "telegram") {
+      const chatId = typeof event.payload.chatId === "string" ? event.payload.chatId : "";
+      const text = typeof event.payload.text === "string" ? event.payload.text : "";
+
+      if (!chatId || !text) throw new Error("Telegram event does not contain message details.");
+
+      await sendTelegramMessage(chatId, text);
+      await updateIntegrationEvent({ id: event.id, status: "processed" });
+      await logModuleActivity({
+        actorUserId: session.userId,
+        action: "integration_event.retried",
+        details: { eventId, provider: event.provider },
+      });
+
+      revalidatePath("/admin/events");
+      successNotice = "Telegram уведомление повторно отправлено.";
     } else if (event.provider === "google_drive") {
       const clinicName = typeof event.payload.clinicName === "string" ? event.payload.clinicName : "";
       const moduleName = typeof event.payload.moduleName === "string" ? event.payload.moduleName : "";
@@ -292,7 +309,7 @@ export async function retryIntegrationEventAction(formData: FormData) {
       successRedirectPath = `/admin/clinics/${result.clinic.id}`;
       successNotice = "Событие amoCRM повторно обработано.";
     } else {
-      throw new Error("Повтор пока поддерживается для amoCRM, Slack и Google Drive.");
+      throw new Error("Повтор пока поддерживается для amoCRM, Slack, Telegram и Google Drive.");
     }
   } catch (error) {
     await updateIntegrationEvent({ id: event.id, status: "failed", errorMessage: errorMessage(error) });

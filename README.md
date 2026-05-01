@@ -143,6 +143,7 @@ Managers can also manually sync an amoCRM deal from `/admin`, and retry failed o
 amoCRM target statuses are stored in DB settings after the first save in `/admin/settings`; Vercel env remains the fallback.
 Auth attempts are written to `activity_log`, Slack delivery is tracked in `integration_events`, and client uploads are limited to common document/image formats up to 50 MB.
 Google Drive copies into `02_Actual` are tracked in `integration_events` and can be retried from `/admin/events`.
+Non-OTP Telegram notifications are tracked in `integration_events` and can be retried from `/admin/events`.
 
 ## Useful Commands
 

@@ -3,7 +3,7 @@ import { createAmoLeadNote } from "@/lib/amocrm/notes";
 import { createIntegrationEvent, updateIntegrationEvent } from "@/lib/db/integration-events";
 import { getSupabaseAdminClient, hasSupabaseAdminConfig } from "@/lib/db/supabase";
 import { copyModuleFileToActualFolder, hasGoogleDriveConfig } from "@/lib/google-drive/client";
-import { sendTelegramMessage } from "@/lib/telegram/client";
+import { sendTrackedTelegramMessage } from "@/lib/telegram/client";
 
 export type UpdateModuleStatusInput = {
   moduleId: number;
@@ -95,7 +95,12 @@ async function notifyUploadAuthor(userId: number | null | undefined, text: strin
   if (!author?.telegram_chat_id) return;
 
   try {
-    await sendTelegramMessage(author.telegram_chat_id, text);
+    await sendTrackedTelegramMessage({
+      chatId: author.telegram_chat_id,
+      text,
+      eventType: "client_notification",
+      details: { recipientUserId: author.id },
+    });
   } catch (error) {
     console.warn("Telegram module notification failed:", error);
   }

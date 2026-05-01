@@ -1,9 +1,15 @@
+import { createIntegrationEvent, updateIntegrationEvent } from "@/lib/db/integration-events";
+
 type TelegramReplyMarkup = {
   keyboard?: Array<Array<{ text: string; request_contact?: boolean }>>;
   resize_keyboard?: boolean;
   one_time_keyboard?: boolean;
   remove_keyboard?: boolean;
 };
+
+export function hasTelegramSendConfig() {
+  return Boolean(process.env.TELEGRAM_BOT_TOKEN);
+}
 
 export async function sendTelegramMessage(
   chatId: string,
@@ -28,5 +34,31 @@ export async function sendTelegramMessage(
 
   if (!response.ok) {
     throw new Error(`Telegram sendMessage failed: ${response.status}`);
+  }
+}
+
+export async function sendTrackedTelegramMessage(input: {
+  chatId: string;
+  text: string;
+  eventType?: string;
+  details?: Record<string, unknown>;
+}) {
+  const event = await createIntegrationEvent({
+    provider: "telegram",
+    eventType: input.eventType ?? "message",
+    payload: {
+      chatId: input.chatId,
+      text: input.text,
+      ...(input.details ?? {}),
+    },
+  });
+
+  try {
+    await sendTelegramMessage(input.chatId, input.text);
+    await updateIntegrationEvent({ id: event.id, status: "processed" });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown Telegram delivery error.";
+    await updateIntegrationEvent({ id: event.id, status: "failed", errorMessage: message });
+    throw error;
   }
 }
