@@ -65,6 +65,7 @@ Current target statuses:
 
 ```text
 MIS -> Заявка: 84088646
+Delivery -> Сбор: 85285282
 ```
 
 ## Supabase
