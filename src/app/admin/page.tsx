@@ -1,28 +1,25 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import type { ReactNode } from "react";
 import { clinicStatuses, moduleStatuses, type ModuleStatus } from "@/lib/domain";
 import { listAdminClinics, listIntegrationEvents, type IntegrationEventRow } from "@/lib/db/admin";
 import { acceptModuleAction, requestRevisionAction } from "@/app/admin/actions";
 import { getSession } from "@/lib/auth/session";
+import { LogoutButton } from "@/components/logout-button";
+import { Badge, ButtonLink, EmptyState, PageShell, Panel, ProgressBar, StatCard, TextLink } from "@/components/ui";
 
-const moduleStatusTone: Record<ModuleStatus, string> = {
-  collection: "bg-[var(--surface-muted)] text-[var(--muted)]",
-  review: "bg-blue-50 text-[var(--primary)]",
-  needs_revision: "bg-amber-50 text-[var(--warning)]",
-  accepted: "bg-emerald-50 text-[var(--success)]",
+const moduleStatusTone: Record<ModuleStatus, "neutral" | "info" | "success" | "warning"> = {
+  collection: "neutral",
+  review: "info",
+  needs_revision: "warning",
+  accepted: "success",
 };
 
-const eventStatusTone: Record<IntegrationEventRow["status"], string> = {
-  received: "bg-blue-50 text-[var(--primary)]",
-  processed: "bg-emerald-50 text-[var(--success)]",
-  ignored: "bg-slate-100 text-[var(--muted)]",
-  failed: "bg-red-50 text-[var(--danger)]",
+const eventStatusTone: Record<IntegrationEventRow["status"], "neutral" | "info" | "success" | "danger"> = {
+  received: "info",
+  processed: "success",
+  ignored: "neutral",
+  failed: "danger",
 };
-
-function Badge({ children, className }: { children: ReactNode; className: string }) {
-  return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${className}`}>{children}</span>;
-}
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("ru-RU", {
@@ -53,60 +50,53 @@ export default async function AdminPage() {
   const linkedUsers = clinics.flatMap((clinic) => clinic.users).filter((user) => user.telegramLinked).length;
 
   return (
-    <main className="min-h-screen px-6 py-8">
-      <section className="mx-auto max-w-7xl">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold">Админ-панель</h1>
-            <p className="mt-2 text-sm text-[var(--muted)]">Клиники, модули, файлы и события интеграций.</p>
-          </div>
-          <Link className="text-sm font-semibold text-[var(--primary)]" href="/admin/events">
-            Все события
-          </Link>
-        </div>
-
-        <div className="mt-6 grid gap-4 md:grid-cols-4">
-          <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm">
-            <div className="text-sm text-[var(--muted)]">Клиники</div>
-            <div className="mt-2 text-3xl font-semibold">{clinics.length}</div>
-          </div>
-          <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm">
-            <div className="text-sm text-[var(--muted)]">На проверке</div>
-            <div className="mt-2 text-3xl font-semibold">{reviewItems.length}</div>
-          </div>
-          <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm">
-            <div className="text-sm text-[var(--muted)]">Telegram привязан</div>
-            <div className="mt-2 text-3xl font-semibold">{linkedUsers}</div>
-          </div>
-          <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm">
-            <div className="text-sm text-[var(--muted)]">Ошибки интеграций</div>
-            <div className="mt-2 text-3xl font-semibold">{failedEvents}</div>
-          </div>
-        </div>
-
-        <div className="mt-6 grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
-          <section className="rounded-lg border border-[var(--border)] bg-[var(--surface)] shadow-sm">
-            <div className="border-b border-[var(--border)] p-5">
-              <h2 className="text-lg font-semibold">Клиники</h2>
+    <PageShell wide>
+      <div className="flex flex-col gap-6">
+        <header className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--muted)]">Рабочее место</div>
+              <h1 className="mt-1 text-3xl font-semibold tracking-tight">Админ-панель</h1>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted)]">
+                Контроль клиник, очереди проверки, Telegram-привязок и событий интеграций.
+              </p>
             </div>
+            <div className="flex flex-wrap gap-2">
+              <ButtonLink href="/portal">Портал</ButtonLink>
+              <ButtonLink href="/admin/events">События</ButtonLink>
+              <LogoutButton />
+            </div>
+          </div>
+        </header>
+
+        <div className="grid gap-4 md:grid-cols-4">
+          <StatCard hint="Всего в системе" label="Клиники" tone="info" value={clinics.length} />
+          <StatCard hint="Ожидают решения" label="На проверке" tone={reviewItems.length ? "warning" : "neutral"} value={reviewItems.length} />
+          <StatCard hint="Контакты с кодами входа" label="Telegram привязан" tone="success" value={linkedUsers} />
+          <StatCard hint="За последние события" label="Ошибки интеграций" tone={failedEvents ? "danger" : "neutral"} value={failedEvents} />
+        </div>
+
+        <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
+          <Panel title="Клиники">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[760px] text-left text-sm">
-                <thead className="border-b border-[var(--border)] text-[var(--muted)]">
+              <table className="w-full min-w-full text-left text-sm sm:min-w-[760px]">
+                <thead className="border-b border-[var(--border)] bg-slate-50 text-[var(--muted)]">
                   <tr>
                     <th className="px-5 py-3 font-medium">Клиника</th>
                     <th className="px-5 py-3 font-medium">Статус</th>
                     <th className="px-5 py-3 font-medium">Модули</th>
-                    <th className="px-5 py-3 font-medium">Контакты</th>
-                    <th className="px-5 py-3 font-medium">Создана</th>
+                    <th className="hidden px-5 py-3 font-medium sm:table-cell">Контакты</th>
+                    <th className="hidden px-5 py-3 font-medium sm:table-cell">Создана</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border)]">
                   {clinics.map((clinic) => {
                     const waiting = clinic.modules.filter((module) => module.status === "review").length;
                     const accepted = clinic.modules.filter((module) => module.status === "accepted").length;
+                    const progress = clinic.modules.length > 0 ? Math.round((accepted / clinic.modules.length) * 100) : 0;
 
                     return (
-                      <tr key={clinic.id}>
+                      <tr key={clinic.id} className="transition hover:bg-slate-50">
                         <td className="px-5 py-4">
                           <Link className="font-semibold text-[var(--primary)]" href={`/admin/clinics/${clinic.id}`}>
                             {clinic.name}
@@ -115,13 +105,18 @@ export default async function AdminPage() {
                             amo: {clinic.amoDealId ?? "не задано"}
                           </div>
                         </td>
-                        <td className="px-5 py-4">{clinicStatuses[clinic.status] ?? clinic.status}</td>
                         <td className="px-5 py-4">
-                          {accepted}/{clinic.modules.length} принято
+                          <Badge tone="info">{clinicStatuses[clinic.status] ?? clinic.status}</Badge>
+                        </td>
+                        <td className="px-5 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-28"><ProgressBar value={progress} /></div>
+                            <span className="font-medium">{accepted}/{clinic.modules.length}</span>
+                          </div>
                           {waiting ? <div className="mt-1 text-xs text-[var(--primary)]">{waiting} на проверке</div> : null}
                         </td>
-                        <td className="px-5 py-4">{clinic.users.length}</td>
-                        <td className="px-5 py-4 text-[var(--muted)]">{formatDate(clinic.createdAt)}</td>
+                        <td className="hidden px-5 py-4 sm:table-cell">{clinic.users.length}</td>
+                        <td className="hidden px-5 py-4 text-[var(--muted)] sm:table-cell">{formatDate(clinic.createdAt)}</td>
                       </tr>
                     );
                   })}
@@ -135,32 +130,27 @@ export default async function AdminPage() {
                 </tbody>
               </table>
             </div>
-          </section>
+          </Panel>
 
-          <section className="rounded-lg border border-[var(--border)] bg-[var(--surface)] shadow-sm">
-            <div className="border-b border-[var(--border)] p-5">
-              <h2 className="text-lg font-semibold">События</h2>
-            </div>
+          <Panel title="События" action={<TextLink href="/admin/events">Все события</TextLink>}>
             <div className="divide-y divide-[var(--border)]">
               {events.slice(0, 8).map((event) => (
-                <div key={event.id} className="p-4">
+                <div key={event.id} className="p-4 transition hover:bg-slate-50">
                   <div className="flex items-center justify-between gap-3">
                     <div className="font-mono text-xs text-[var(--muted)]">#{event.id} {event.provider}</div>
-                    <Badge className={eventStatusTone[event.status]}>{event.status}</Badge>
+                    <Badge tone={eventStatusTone[event.status]}>{event.status}</Badge>
                   </div>
                   <div className="mt-2 text-sm">{event.externalId ?? event.eventType ?? "event"}</div>
                   {event.errorMessage ? <div className="mt-1 text-xs text-[var(--danger)]">{event.errorMessage}</div> : null}
                   <div className="mt-2 text-xs text-[var(--muted)]">{formatDate(event.createdAt)}</div>
                 </div>
               ))}
+              {events.length === 0 ? <EmptyState>Событий пока нет.</EmptyState> : null}
             </div>
-          </section>
+          </Panel>
         </div>
 
-        <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] shadow-sm">
-          <div className="border-b border-[var(--border)] p-5">
-            <h2 className="text-lg font-semibold">Очередь менеджера</h2>
-          </div>
+        <Panel title="Очередь менеджера">
           <div className="divide-y divide-[var(--border)]">
             {reviewItems.map(({ clinic, module }) => (
               <div key={`${clinic.id}-${module.id}`} className="grid gap-4 p-5 lg:grid-cols-[1fr_auto] lg:items-center">
@@ -170,7 +160,7 @@ export default async function AdminPage() {
                   </Link>
                   <div className="mt-1 font-semibold">{module.name}</div>
                   <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <Badge className={moduleStatusTone[module.status]}>{moduleStatuses[module.status]}</Badge>
+                    <Badge tone={moduleStatusTone[module.status]}>{moduleStatuses[module.status]}</Badge>
                     {module.files[0]?.fileUrl ? (
                       <a className="text-sm font-semibold text-[var(--primary)]" href={module.files[0].fileUrl} rel="noreferrer" target="_blank">
                         Открыть файл
@@ -182,7 +172,7 @@ export default async function AdminPage() {
                   <form action={acceptModuleAction}>
                     <input name="moduleId" type="hidden" value={module.id} />
                     <input name="clinicId" type="hidden" value={clinic.id} />
-                    <button className="h-10 rounded-md bg-[var(--success)] px-4 text-sm font-semibold text-white" type="submit">
+                    <button className="h-10 rounded-md bg-[var(--success)] px-4 text-sm font-semibold text-white shadow-sm transition hover:brightness-95" type="submit">
                       Принять
                     </button>
                   </form>
@@ -190,21 +180,21 @@ export default async function AdminPage() {
                     <input name="moduleId" type="hidden" value={module.id} />
                     <input name="clinicId" type="hidden" value={clinic.id} />
                     <input
-                      className="h-10 w-56 rounded-md border border-[var(--border)] px-3 text-sm outline-none focus:border-[var(--primary)]"
+                      className="h-10 w-56 rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none transition focus:border-[var(--primary)]"
                       name="comment"
                       placeholder="Комментарий"
                     />
-                    <button className="h-10 rounded-md border border-[var(--border)] px-4 text-sm font-semibold" type="submit">
+                    <button className="h-10 rounded-md border border-[var(--border)] bg-white px-4 text-sm font-semibold transition hover:border-slate-300 hover:bg-slate-50" type="submit">
                       Правки
                     </button>
                   </form>
                 </div>
               </div>
             ))}
-            {reviewItems.length === 0 ? <div className="p-8 text-center text-sm text-[var(--muted)]">Очередь пуста.</div> : null}
+            {reviewItems.length === 0 ? <EmptyState>Очередь пуста. Новые файлы появятся здесь после загрузки клиентом.</EmptyState> : null}
           </div>
-        </section>
-      </section>
-    </main>
+        </Panel>
+      </div>
+    </PageShell>
   );
 }

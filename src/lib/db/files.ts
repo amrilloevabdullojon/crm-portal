@@ -8,6 +8,8 @@ export type ModuleUploadContext = {
   clinicName: string;
   moduleId: number;
   moduleName: string;
+  nextVersion: number;
+  status: ModuleStatus;
 };
 
 export type RecordModuleUploadInput = ModuleUploadContext & {
@@ -38,15 +40,17 @@ export async function getModuleUploadContext(moduleId: number): Promise<ModuleUp
       clinicName: sampleClinic.name,
       moduleId: portalModule.id,
       moduleName: portalModule.name,
+      nextVersion: 1,
+      status: portalModule.status,
     };
   }
 
   const supabase = getSupabaseAdminClient();
   const { data, error } = await supabase
     .from("clinic_modules")
-    .select("id,name,clinic_id,status,clinics(id,name)")
+    .select("id,name,clinic_id,status,clinics(id,name),uploaded_files(id)")
     .eq("id", moduleId)
-    .single<ModuleContextRow>();
+    .single<ModuleContextRow & { uploaded_files?: { id: number }[] | null }>();
 
   if (error || !data) {
     console.warn("Module upload context lookup failed:", error?.message);
@@ -62,6 +66,8 @@ export async function getModuleUploadContext(moduleId: number): Promise<ModuleUp
     clinicName: clinic.name,
     moduleId: data.id,
     moduleName: data.name,
+    nextVersion: (data.uploaded_files?.length ?? 0) + 1,
+    status: data.status,
   };
 }
 
@@ -98,7 +104,7 @@ export async function recordModuleUpload(input: RecordModuleUploadInput) {
     throw new Error(`File metadata insert failed: ${insertError.message}`);
   }
 
-  await updateModuleStatus({ moduleId: input.moduleId, status: "review" });
+  await updateModuleStatus({ moduleId: input.moduleId, status: "review", managerComment: null });
   await logModuleActivity({
     clinicId: input.clinicId,
     moduleId: input.moduleId,

@@ -1,21 +1,17 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import type { ReactNode } from "react";
 import { clinicStatuses, moduleStatuses, type ModuleStatus } from "@/lib/domain";
 import { getAdminClinic } from "@/lib/db/admin";
 import { acceptModuleAction, requestRevisionAction } from "@/app/admin/actions";
 import { getSession } from "@/lib/auth/session";
+import { LogoutButton } from "@/components/logout-button";
+import { Badge, ButtonLink, EmptyState, PageShell, Panel, ProgressBar, StatCard, TextLink } from "@/components/ui";
 
-const moduleStatusTone: Record<ModuleStatus, string> = {
-  collection: "bg-[var(--surface-muted)] text-[var(--muted)]",
-  review: "bg-blue-50 text-[var(--primary)]",
-  needs_revision: "bg-amber-50 text-[var(--warning)]",
-  accepted: "bg-emerald-50 text-[var(--success)]",
+const moduleStatusTone: Record<ModuleStatus, "neutral" | "info" | "success" | "warning"> = {
+  collection: "neutral",
+  review: "info",
+  needs_revision: "warning",
+  accepted: "success",
 };
-
-function Badge({ children, className }: { children: ReactNode; className: string }) {
-  return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${className}`}>{children}</span>;
-}
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("ru-RU", {
@@ -43,62 +39,74 @@ export default async function AdminClinicPage({ params }: { params: Promise<{ id
 
   const clinic = await getAdminClinic(clinicId);
   if (!clinic) notFound();
+  const acceptedCount = clinic.modules.filter((module) => module.status === "accepted").length;
+  const reviewCount = clinic.modules.filter((module) => module.status === "review").length;
+  const revisionCount = clinic.modules.filter((module) => module.status === "needs_revision").length;
+  const progress = clinic.modules.length > 0 ? Math.round((acceptedCount / clinic.modules.length) * 100) : 0;
 
   return (
-    <main className="min-h-screen px-6 py-8">
-      <section className="mx-auto max-w-6xl">
-        <Link className="text-sm font-semibold text-[var(--primary)]" href="/admin">
-          Назад в админку
-        </Link>
+    <PageShell>
+      <div className="flex flex-col gap-6">
+        <TextLink href="/admin">Назад в админку</TextLink>
 
-        <div className="mt-5 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">
+        <header className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
-              <h1 className="text-2xl font-semibold">{clinic.name}</h1>
-              <div className="mt-2 text-sm text-[var(--muted)]">
+              <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--muted)]">Карточка клиники</div>
+              <h1 className="mt-1 text-3xl font-semibold tracking-tight">{clinic.name}</h1>
+              <div className="mt-2 text-sm leading-6 text-[var(--muted)]">
                 {clinicStatuses[clinic.status] ?? clinic.status} · создана {formatDate(clinic.createdAt)}
               </div>
               <div className="mt-2 font-mono text-xs text-[var(--muted)]">amo deal: {clinic.amoDealId ?? "не задано"}</div>
             </div>
-            {clinic.driveFolderUrl ? (
-              <a
-                className="inline-flex h-10 items-center justify-center rounded-md border border-[var(--border)] px-4 text-sm font-semibold"
-                href={clinic.driveFolderUrl}
-                rel="noreferrer"
-                target="_blank"
-              >
-                Папка Drive
-              </a>
-            ) : null}
+            <div className="flex flex-wrap gap-2">
+              {clinic.driveFolderUrl ? (
+                <a
+                  className="inline-flex h-10 items-center justify-center rounded-md border border-[var(--border)] bg-white px-4 text-sm font-semibold transition hover:border-slate-300 hover:bg-slate-50"
+                  href={clinic.driveFolderUrl}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  Папка Drive
+                </a>
+              ) : null}
+              <ButtonLink href="/admin/events">События</ButtonLink>
+              <LogoutButton />
+            </div>
           </div>
+          <div className="mt-5 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
+            <ProgressBar value={progress} />
+            <div className="text-sm font-semibold text-[var(--muted)]">{progress}% принято</div>
+          </div>
+        </header>
+
+        <div className="grid gap-4 md:grid-cols-4">
+          <StatCard hint="Контакты клиники" label="Пользователи" tone="info" value={clinic.users.length} />
+          <StatCard hint={`${acceptedCount} из ${clinic.modules.length}`} label="Принято" tone="success" value={acceptedCount} />
+          <StatCard hint="Ожидают менеджера" label="На проверке" tone={reviewCount ? "warning" : "neutral"} value={reviewCount} />
+          <StatCard hint="Нужен ответ клиента" label="Правки" tone={revisionCount ? "warning" : "neutral"} value={revisionCount} />
         </div>
 
-        <div className="mt-6 grid gap-6 lg:grid-cols-[0.7fr_1.3fr]">
-          <section className="rounded-lg border border-[var(--border)] bg-[var(--surface)] shadow-sm">
-            <div className="border-b border-[var(--border)] p-5">
-              <h2 className="text-lg font-semibold">Контакты</h2>
-            </div>
+        <div className="grid gap-6 lg:grid-cols-[0.7fr_1.3fr]">
+          <Panel title="Контакты">
             <div className="divide-y divide-[var(--border)]">
               {clinic.users.map((user) => (
-                <div key={user.userId} className="p-5">
+                <div key={user.userId} className="p-5 transition hover:bg-slate-50">
                   <div className="font-semibold">{user.name}</div>
                   <div className="mt-1 font-mono text-sm text-[var(--muted)]">{user.phone}</div>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <Badge className="bg-[var(--surface-muted)] text-[var(--muted)]">{user.role}</Badge>
-                    <Badge className={user.telegramLinked ? "bg-emerald-50 text-[var(--success)]" : "bg-amber-50 text-[var(--warning)]"}>
+                    <Badge tone={user.role === "admin" ? "info" : "neutral"}>{user.role}</Badge>
+                    <Badge tone={user.telegramLinked ? "success" : "warning"}>
                       {user.telegramLinked ? "Telegram привязан" : "Telegram не привязан"}
                     </Badge>
                   </div>
                 </div>
               ))}
-              {clinic.users.length === 0 ? <div className="p-5 text-sm text-[var(--muted)]">Контактов пока нет.</div> : null}
+              {clinic.users.length === 0 ? <EmptyState>Контактов пока нет.</EmptyState> : null}
             </div>
-          </section>
+          </Panel>
 
-          <section className="rounded-lg border border-[var(--border)] bg-[var(--surface)] shadow-sm">
-            <div className="border-b border-[var(--border)] p-5">
-              <h2 className="text-lg font-semibold">Модули и файлы</h2>
-            </div>
+          <Panel title="Модули и файлы">
             <div className="divide-y divide-[var(--border)]">
               {clinic.modules.map((module) => (
                 <div key={module.id} className="p-5">
@@ -106,9 +114,11 @@ export default async function AdminClinicPage({ params }: { params: Promise<{ id
                     <div>
                       <div className="font-semibold">{module.name}</div>
                       <div className="mt-2 flex flex-wrap gap-2">
-                        <Badge className={moduleStatusTone[module.status]}>{moduleStatuses[module.status]}</Badge>
+                        <Badge tone={moduleStatusTone[module.status]}>{moduleStatuses[module.status]}</Badge>
                         {module.managerComment ? (
-                          <span className="text-sm text-[var(--warning)]">{module.managerComment}</span>
+                          <span className="rounded-md border border-amber-100 bg-amber-50 px-2.5 py-1 text-sm text-[var(--warning)]">
+                            {module.managerComment}
+                          </span>
                         ) : null}
                       </div>
                     </div>
@@ -116,7 +126,7 @@ export default async function AdminClinicPage({ params }: { params: Promise<{ id
                       <form action={acceptModuleAction}>
                         <input name="moduleId" type="hidden" value={module.id} />
                         <input name="clinicId" type="hidden" value={clinic.id} />
-                        <button className="h-10 rounded-md bg-[var(--success)] px-4 text-sm font-semibold text-white" type="submit">
+                        <button className="h-10 rounded-md bg-[var(--success)] px-4 text-sm font-semibold text-white shadow-sm transition hover:brightness-95" type="submit">
                           Принять
                         </button>
                       </form>
@@ -124,11 +134,11 @@ export default async function AdminClinicPage({ params }: { params: Promise<{ id
                         <input name="moduleId" type="hidden" value={module.id} />
                         <input name="clinicId" type="hidden" value={clinic.id} />
                         <input
-                          className="h-10 w-56 rounded-md border border-[var(--border)] px-3 text-sm outline-none focus:border-[var(--primary)]"
+                          className="h-10 w-56 rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none transition focus:border-[var(--primary)]"
                           name="comment"
                           placeholder="Комментарий"
                         />
-                        <button className="h-10 rounded-md border border-[var(--border)] px-4 text-sm font-semibold" type="submit">
+                        <button className="h-10 rounded-md border border-[var(--border)] bg-white px-4 text-sm font-semibold transition hover:border-slate-300 hover:bg-slate-50" type="submit">
                           Правки
                         </button>
                       </form>
@@ -138,12 +148,12 @@ export default async function AdminClinicPage({ params }: { params: Promise<{ id
                   <div className="mt-4">
                     {module.files.length > 0 ? (
                       <div className="overflow-x-auto">
-                        <table className="w-full min-w-[560px] text-left text-sm">
+                        <table className="w-full min-w-full text-left text-sm sm:min-w-[560px]">
                           <thead className="text-[var(--muted)]">
                             <tr>
                               <th className="py-2 pr-4 font-medium">Файл</th>
                               <th className="py-2 pr-4 font-medium">Версия</th>
-                              <th className="py-2 pr-4 font-medium">Дата</th>
+                              <th className="hidden py-2 pr-4 font-medium sm:table-cell">Дата</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -154,23 +164,26 @@ export default async function AdminClinicPage({ params }: { params: Promise<{ id
                                     {file.fileName}
                                   </a>
                                 </td>
-                                <td className="py-3 pr-4">{file.isCurrent ? "Текущий" : "Старый"}</td>
-                                <td className="py-3 pr-4 text-[var(--muted)]">{formatDate(file.createdAt)}</td>
+                                <td className="py-3 pr-4">
+                                  <Badge tone={file.isCurrent ? "success" : "neutral"}>{file.isCurrent ? "Текущий" : "Старый"}</Badge>
+                                </td>
+                                <td className="hidden py-3 pr-4 text-[var(--muted)] sm:table-cell">{formatDate(file.createdAt)}</td>
                               </tr>
                             ))}
                           </tbody>
                         </table>
                       </div>
                     ) : (
-                      <div className="text-sm text-[var(--muted)]">Файлы еще не загружены.</div>
+                      <div className="rounded-md bg-slate-50 px-3 py-3 text-sm text-[var(--muted)]">Файлы еще не загружены.</div>
                     )}
                   </div>
                 </div>
               ))}
+              {clinic.modules.length === 0 ? <EmptyState>Модули пока не настроены.</EmptyState> : null}
             </div>
-          </section>
+          </Panel>
         </div>
-      </section>
-    </main>
+      </div>
+    </PageShell>
   );
 }

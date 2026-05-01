@@ -7,6 +7,7 @@ export type DriveUploadInput = {
   fileName: string;
   mimeType: string;
   data: ArrayBuffer;
+  version: number;
 };
 
 export type DriveUploadResult = {
@@ -147,10 +148,35 @@ export async function ensureClinicDriveFolders(clinicName: string): Promise<Clin
   };
 }
 
-function makeUploadFileName(fileName: string) {
+function getTashkentStamp(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    hour: "2-digit",
+    hour12: false,
+    minute: "2-digit",
+    month: "2-digit",
+    timeZone: "Asia/Tashkent",
+    year: "numeric",
+  }).formatToParts(date);
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? "00";
+
+  return `${part("year")}${part("month")}${part("day")}_${part("hour")}${part("minute")}`;
+}
+
+function getFileExtension(fileName: string) {
   const safeName = safeDriveName(fileName);
-  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-  return `${stamp}_${safeName}`;
+  const dotIndex = safeName.lastIndexOf(".");
+
+  if (dotIndex <= 0 || dotIndex === safeName.length - 1) return "";
+
+  return safeName.slice(dotIndex).replace(/[^.\w-]/g, "");
+}
+
+function makeUploadFileName(input: Pick<DriveUploadInput, "fileName" | "moduleName" | "version">) {
+  const blockName = safeDriveName(input.moduleName).replace(/\s+/g, "_");
+  const extension = getFileExtension(input.fileName);
+
+  return `${blockName}_v${input.version}_${getTashkentStamp()}${extension}`;
 }
 
 export async function uploadModuleFileToDrive(input: DriveUploadInput): Promise<DriveUploadResult> {
@@ -160,7 +186,7 @@ export async function uploadModuleFileToDrive(input: DriveUploadInput): Promise<
 
   const drive = getDriveClient();
   const moduleFolderId = await ensureModuleUploadFolder(input);
-  const uploadFileName = makeUploadFileName(input.fileName);
+  const uploadFileName = makeUploadFileName(input);
 
   const response = await drive.files.create({
     requestBody: {

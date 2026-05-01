@@ -13,6 +13,7 @@ export function ModuleFileUploadForm({ moduleId, moduleName }: ModuleFileUploadF
   const inputRef = useRef<HTMLInputElement>(null);
   const [state, setState] = useState<UploadState>("idle");
   const [message, setMessage] = useState<string>("");
+  const [fileName, setFileName] = useState("");
 
   async function uploadFile() {
     const file = inputRef.current?.files?.[0];
@@ -44,25 +45,35 @@ export function ModuleFileUploadForm({ moduleId, moduleName }: ModuleFileUploadF
 
     setState("success");
     setMessage(`Файл загружен для модуля "${moduleName}".`);
+    setFileName("");
     if (inputRef.current) inputRef.current.value = "";
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap gap-3">
+    <div className="w-full max-w-xl">
+      <div className="flex flex-col gap-3 sm:flex-row">
         <input
           ref={inputRef}
           aria-label={`Файл для модуля ${moduleName}`}
-          className="max-w-full rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-[var(--surface-muted)] file:px-3 file:py-1.5 file:text-sm file:font-medium"
-          onChange={() => {
+          className="sr-only"
+          id={`module-file-${moduleId}`}
+          onChange={(event) => {
+            setFileName(event.target.files?.[0]?.name ?? "");
             setState("ready");
             setMessage("");
           }}
           type="file"
         />
+        <label
+          className="flex h-10 min-w-0 flex-1 cursor-pointer items-center rounded-md border border-[var(--border)] bg-white px-3 text-sm transition hover:border-slate-300 hover:bg-slate-50"
+          htmlFor={`module-file-${moduleId}`}
+        >
+          <span className="shrink-0 font-semibold text-[var(--foreground)]">Выбрать файл</span>
+          <span className="ml-3 truncate text-[var(--muted)]">{fileName || "Файл не выбран"}</span>
+        </label>
         <button
-          className="h-10 rounded-md bg-[var(--primary)] px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-          disabled={state === "uploading"}
+          className="h-10 rounded-md bg-[var(--primary)] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)] disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={state === "uploading" || !fileName}
           onClick={uploadFile}
           type="button"
         >
@@ -70,7 +81,7 @@ export function ModuleFileUploadForm({ moduleId, moduleName }: ModuleFileUploadF
         </button>
       </div>
       {message ? (
-        <p className={`text-sm ${state === "error" ? "text-[var(--danger)]" : "text-[var(--success)]"}`}>
+        <p className={`mt-2 text-sm ${state === "error" ? "text-[var(--danger)]" : "text-[var(--success)]"}`}>
           {message}
         </p>
       ) : null}

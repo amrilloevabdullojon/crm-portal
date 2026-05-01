@@ -1,19 +1,15 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import type { ReactNode } from "react";
 import { listIntegrationEvents, type IntegrationEventRow } from "@/lib/db/admin";
 import { getSession } from "@/lib/auth/session";
+import { LogoutButton } from "@/components/logout-button";
+import { Badge, ButtonLink, EmptyState, PageShell, Panel, StatCard, TextLink } from "@/components/ui";
 
-const eventStatusTone: Record<IntegrationEventRow["status"], string> = {
-  received: "bg-blue-50 text-[var(--primary)]",
-  processed: "bg-emerald-50 text-[var(--success)]",
-  ignored: "bg-slate-100 text-[var(--muted)]",
-  failed: "bg-red-50 text-[var(--danger)]",
+const eventStatusTone: Record<IntegrationEventRow["status"], "neutral" | "info" | "success" | "danger"> = {
+  received: "info",
+  processed: "success",
+  ignored: "neutral",
+  failed: "danger",
 };
-
-function Badge({ children, className }: { children: ReactNode; className: string }) {
-  return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${className}`}>{children}</span>;
-}
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("ru-RU", {
@@ -35,57 +31,78 @@ export default async function AdminEventsPage() {
   }
 
   const events = await listIntegrationEvents(80);
+  const failed = events.filter((event) => event.status === "failed").length;
+  const processed = events.filter((event) => event.status === "processed").length;
+  const ignored = events.filter((event) => event.status === "ignored").length;
 
   return (
-    <main className="min-h-screen px-6 py-8">
-      <section className="mx-auto max-w-7xl">
-        <Link className="text-sm font-semibold text-[var(--primary)]" href="/admin">
-          Назад в админку
-        </Link>
-        <div className="mt-5 rounded-lg border border-[var(--border)] bg-[var(--surface)] shadow-sm">
-          <div className="border-b border-[var(--border)] p-5">
-            <h1 className="text-2xl font-semibold">События интеграций</h1>
-            <p className="mt-2 text-sm text-[var(--muted)]">Последние webhook и системные события amoCRM, Telegram и Drive.</p>
+    <PageShell wide>
+      <div className="flex flex-col gap-6">
+        <TextLink href="/admin">Назад в админку</TextLink>
+
+        <header className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--muted)]">Мониторинг</div>
+              <h1 className="mt-1 text-3xl font-semibold tracking-tight">События интеграций</h1>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted)]">
+                Последние webhook и системные события amoCRM, Telegram и Google Drive.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <ButtonLink href="/admin">Админка</ButtonLink>
+              <LogoutButton />
+            </div>
           </div>
+        </header>
+
+        <div className="grid gap-4 md:grid-cols-4">
+          <StatCard hint="Последние 80 записей" label="Всего событий" tone="info" value={events.length} />
+          <StatCard hint="Успешно обработаны" label="Processed" tone="success" value={processed} />
+          <StatCard hint="Не требовали действий" label="Ignored" tone="neutral" value={ignored} />
+          <StatCard hint="Требуют внимания" label="Failed" tone={failed ? "danger" : "neutral"} value={failed} />
+        </div>
+
+        <Panel title="Журнал событий">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[920px] text-left text-sm">
-              <thead className="border-b border-[var(--border)] text-[var(--muted)]">
+            <table className="w-full min-w-full text-left text-sm sm:min-w-[920px]">
+              <thead className="border-b border-[var(--border)] bg-slate-50 text-[var(--muted)]">
                 <tr>
                   <th className="px-5 py-3 font-medium">ID</th>
-                  <th className="px-5 py-3 font-medium">Provider</th>
+                  <th className="hidden px-5 py-3 font-medium sm:table-cell">Provider</th>
                   <th className="px-5 py-3 font-medium">Status</th>
                   <th className="px-5 py-3 font-medium">External ID</th>
-                  <th className="px-5 py-3 font-medium">Error</th>
-                  <th className="px-5 py-3 font-medium">Created</th>
+                  <th className="hidden px-5 py-3 font-medium md:table-cell">Error</th>
+                  <th className="hidden px-5 py-3 font-medium sm:table-cell">Created</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
                 {events.map((event) => (
-                  <tr key={event.id}>
+                  <tr key={event.id} className="transition hover:bg-slate-50">
                     <td className="px-5 py-4 font-mono text-xs text-[var(--muted)]">#{event.id}</td>
-                    <td className="px-5 py-4">{event.provider}</td>
+                    <td className="hidden px-5 py-4 sm:table-cell">{event.provider}</td>
                     <td className="px-5 py-4">
-                      <Badge className={eventStatusTone[event.status]}>{event.status}</Badge>
+                      <Badge tone={eventStatusTone[event.status]}>{event.status}</Badge>
                     </td>
-                    <td className="max-w-[280px] truncate px-5 py-4 font-mono text-xs">{event.externalId ?? event.eventType ?? "event"}</td>
-                    <td className="max-w-[360px] px-5 py-4 text-[var(--danger)]">
+                    <td className="max-w-[280px] break-all px-5 py-4 font-mono text-xs">{event.externalId ?? event.eventType ?? "event"}</td>
+                    <td className="hidden max-w-[360px] px-5 py-4 text-[var(--danger)] md:table-cell">
                       {event.errorMessage ? <span className="line-clamp-2">{event.errorMessage}</span> : "—"}
                     </td>
-                    <td className="px-5 py-4 text-[var(--muted)]">{formatDate(event.createdAt)}</td>
+                    <td className="hidden px-5 py-4 text-[var(--muted)] sm:table-cell">{formatDate(event.createdAt)}</td>
                   </tr>
                 ))}
                 {events.length === 0 ? (
                   <tr>
                     <td className="px-5 py-8 text-center text-[var(--muted)]" colSpan={6}>
-                      Событий пока нет.
+                      <EmptyState>Событий пока нет.</EmptyState>
                     </td>
                   </tr>
                 ) : null}
               </tbody>
             </table>
           </div>
-        </div>
-      </section>
-    </main>
+        </Panel>
+      </div>
+    </PageShell>
   );
 }

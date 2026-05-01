@@ -47,6 +47,13 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       return NextResponse.json({ ok: false, error: "Forbidden." }, { status: 403 });
     }
 
+    if (moduleContext.status === "accepted") {
+      return NextResponse.json(
+        { ok: false, error: "Этот модуль уже принят. Повторная загрузка заблокирована." },
+        { status: 409 },
+      );
+    }
+
     const data = await file.arrayBuffer();
     const uploadedFile = await uploadModuleFileToDrive({
       clinicName: moduleContext.clinicName,
@@ -54,6 +61,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       fileName: file.name,
       mimeType: file.type || "application/octet-stream",
       data,
+      version: moduleContext.nextVersion,
     });
 
     await recordModuleUpload({
