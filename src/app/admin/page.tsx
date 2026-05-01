@@ -6,7 +6,7 @@ import { acceptModuleAction, requestRevisionAction, syncAmoDealAction } from "@/
 import { getSession } from "@/lib/auth/session";
 import { getSlaSummary } from "@/lib/sla";
 import { LogoutButton } from "@/components/logout-button";
-import { Badge, ButtonLink, EmptyState, PageShell, Panel, ProgressBar, StatCard, TextLink } from "@/components/ui";
+import { Badge, ButtonLink, EmptyState, Notice, PageShell, Panel, ProgressBar, StatCard, TextLink } from "@/components/ui";
 
 const moduleStatusTone: Record<ModuleStatus, "neutral" | "info" | "success" | "warning"> = {
   collection: "neutral",
@@ -62,6 +62,8 @@ export default async function AdminPage({
   const query = String(params.q ?? "").trim().toLowerCase();
   const moduleStatus = String(params.moduleStatus ?? "all");
   const slaFilter = String(params.sla ?? "all");
+  const notice = typeof params.notice === "string" ? params.notice : "";
+  const error = typeof params.error === "string" ? params.error : "";
   const [allClinics, events] = await Promise.all([listAdminClinics(), listIntegrationEvents(12)]);
   const clinics = allClinics.filter((clinic) => {
     const matchesQuery =
@@ -106,6 +108,9 @@ export default async function AdminPage({
             </div>
           </div>
         </header>
+
+        {notice ? <Notice tone="success">{notice}</Notice> : null}
+        {error ? <Notice tone="danger">{error}</Notice> : null}
 
         <div className="grid gap-4 md:grid-cols-5">
           <StatCard hint={`Показано ${clinics.length} из ${allClinics.length}`} label="Клиники" tone="info" value={clinics.length} />

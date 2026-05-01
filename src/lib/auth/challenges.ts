@@ -1,5 +1,6 @@
 import { createHash, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 import type { UserRole } from "@/lib/domain";
+import { createActivityLog } from "@/lib/db/activity";
 import { getSupabaseAdminClient, hasSupabaseAdminConfig } from "@/lib/db/supabase";
 import { normalizePhone } from "@/lib/auth/phone";
 import { sendTelegramMessage } from "@/lib/telegram/client";
@@ -110,16 +111,29 @@ export async function startAuthChallenge(rawPhone: string) {
   const phone = normalizePhone(rawPhone);
 
   if (!phone) {
+    await createActivityLog({
+      action: "auth.challenge_rejected",
+      details: { reason: "missing_phone" },
+    });
     return { ok: false as const, error: "Phone is required." };
   }
 
   const user = await findUserByPhone(phone);
 
   if (!user) {
+    await createActivityLog({
+      action: "auth.challenge_rejected",
+      details: { phone, reason: "user_not_found" },
+    });
     return { ok: false as const, error: "User was not found." };
   }
 
   if (!isDevelopment() && !user.telegram_chat_id) {
+    await createActivityLog({
+      actorUserId: user.id,
+      action: "auth.challenge_rejected",
+      details: { phone, reason: "telegram_not_linked" },
+    });
     return {
       ok: false as const,
       code: "telegram_not_linked",
@@ -129,6 +143,11 @@ export async function startAuthChallenge(rawPhone: string) {
   }
 
   if (!isDevelopment() && !process.env.TELEGRAM_BOT_TOKEN) {
+    await createActivityLog({
+      actorUserId: user.id,
+      action: "auth.challenge_rejected",
+      details: { phone, reason: "telegram_not_configured" },
+    });
     return {
       ok: false as const,
       code: "telegram_not_configured",
@@ -137,6 +156,11 @@ export async function startAuthChallenge(rawPhone: string) {
   }
 
   if (await isPhoneRateLimited(phone)) {
+    await createActivityLog({
+      actorUserId: user.id,
+      action: "auth.challenge_rate_limited",
+      details: { phone },
+    });
     return {
       ok: false as const,
       code: "rate_limited",
@@ -187,6 +211,11 @@ export async function startAuthChallenge(rawPhone: string) {
     delivery = await sendChallengeCode(user, code);
   } catch (error) {
     console.warn("Telegram auth code delivery failed:", error);
+    await createActivityLog({
+      actorUserId: user.id,
+      action: "auth.challenge_delivery_failed",
+      details: { phone },
+    });
     return {
       ok: false as const,
       code: "telegram_delivery_failed",
@@ -194,6 +223,12 @@ export async function startAuthChallenge(rawPhone: string) {
       telegramBotUsername: getTelegramBotUsername(),
     };
   }
+
+  await createActivityLog({
+    actorUserId: user.id,
+    action: "auth.challenge_started",
+    details: { phone, delivered: delivery.delivered },
+  });
 
   return {
     ok: true as const,
@@ -255,10 +290,22 @@ export async function verifyAuthChallenge(input: { challengeId: string; code: st
     new Date(data.expires_at).getTime() <= Date.now() ||
     !hashesMatch(data.code_hash, codeHash)
   ) {
+    await createActivityLog({
+      actorUserId: data?.user_id ?? null,
+      action: "auth.verify_failed",
+      details: { challengeId: input.challengeId },
+    });
     return { ok: false as const, error: "Invalid or expired code." };
   }
 
   await supabase.from("auth_challenges").update({ consumed_at: new Date().toISOString() }).eq("id", data.id);
+
+  await createActivityLog({
+    actorUserId: user.id,
+    clinicId: user.clinic_users?.[0]?.clinic_id,
+    action: "auth.login_success",
+    details: { role: user.role },
+  });
 
   return {
     ok: true as const,

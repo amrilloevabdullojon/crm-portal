@@ -10,6 +10,14 @@ export type ActivityLogRow = {
   moduleName?: string;
 };
 
+export type CreateActivityLogInput = {
+  actorUserId?: number | null;
+  clinicId?: number | null;
+  moduleId?: number | null;
+  action: string;
+  details?: Record<string, unknown>;
+};
+
 type RawActivityLogRow = {
   id: number;
   action: string;
@@ -76,4 +84,24 @@ export async function listActivityLog(input: { clinicId?: number; limit?: number
   }
 
   return data.map(mapActivity);
+}
+
+export async function createActivityLog(input: CreateActivityLogInput) {
+  if (!hasSupabaseAdminConfig()) return { ok: true, demo: true };
+
+  const supabase = getSupabaseAdminClient();
+  const { error } = await supabase.from("activity_log").insert({
+    actor_user_id: input.actorUserId ?? null,
+    clinic_id: input.clinicId ?? null,
+    module_id: input.moduleId ?? null,
+    action: input.action,
+    details: input.details ?? {},
+  });
+
+  if (error) {
+    console.warn(`Activity log insert failed: ${error.message}`);
+    return { ok: false, demo: false };
+  }
+
+  return { ok: true, demo: false };
 }

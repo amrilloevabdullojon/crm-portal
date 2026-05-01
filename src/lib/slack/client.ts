@@ -1,3 +1,5 @@
+import { createIntegrationEvent, updateIntegrationEvent } from "@/lib/db/integration-events";
+
 function getEnv(name: string) {
   const value = process.env[name]?.trim();
   return value || undefined;
@@ -52,7 +54,7 @@ async function sendViaBot(text: string) {
   return true;
 }
 
-export async function sendSlackMessage(text: string) {
+export async function deliverSlackMessage(text: string) {
   if (!hasSlackConfig()) {
     throw new Error("Slack is not configured. Set SLACK_WEBHOOK_URL or SLACK_BOT_TOKEN + SLACK_ADMIN_CHANNEL_ID.");
   }
@@ -61,4 +63,21 @@ export async function sendSlackMessage(text: string) {
   if (await sendViaBot(text)) return;
 
   throw new Error("Slack is not configured.");
+}
+
+export async function sendSlackMessage(text: string) {
+  const event = await createIntegrationEvent({
+    provider: "slack",
+    eventType: "message",
+    payload: { text },
+  });
+
+  try {
+    await deliverSlackMessage(text);
+    await updateIntegrationEvent({ id: event.id, status: "processed" });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown Slack delivery error.";
+    await updateIntegrationEvent({ id: event.id, status: "failed", errorMessage: message });
+    throw error;
+  }
 }

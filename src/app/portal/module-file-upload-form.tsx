@@ -1,6 +1,12 @@
 "use client";
 
 import { useRef, useState } from "react";
+import {
+  allowedUploadExtensionsLabel,
+  maxUploadSizeLabel,
+  uploadAcceptAttribute,
+  validateUploadFile,
+} from "@/lib/file-policy";
 
 type UploadState = "idle" | "ready" | "uploading" | "success" | "error";
 
@@ -14,6 +20,7 @@ export function ModuleFileUploadForm({ moduleId, moduleName }: ModuleFileUploadF
   const [state, setState] = useState<UploadState>("idle");
   const [message, setMessage] = useState<string>("");
   const [fileName, setFileName] = useState("");
+  const [fileMeta, setFileMeta] = useState("");
 
   async function uploadFile() {
     const file = inputRef.current?.files?.[0];
@@ -21,6 +28,13 @@ export function ModuleFileUploadForm({ moduleId, moduleName }: ModuleFileUploadF
     if (!file) {
       setState("error");
       setMessage("Выберите файл перед загрузкой.");
+      return;
+    }
+
+    const fileValidation = validateUploadFile(file);
+    if (!fileValidation.ok) {
+      setState("error");
+      setMessage(fileValidation.error);
       return;
     }
 
@@ -46,7 +60,13 @@ export function ModuleFileUploadForm({ moduleId, moduleName }: ModuleFileUploadF
     setState("success");
     setMessage(`Файл загружен для модуля "${moduleName}".`);
     setFileName("");
+    setFileMeta("");
     if (inputRef.current) inputRef.current.value = "";
+  }
+
+  function formatFileSize(bytes: number) {
+    if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
   }
 
   return (
@@ -55,12 +75,27 @@ export function ModuleFileUploadForm({ moduleId, moduleName }: ModuleFileUploadF
         <input
           ref={inputRef}
           aria-label={`Файл для модуля ${moduleName}`}
+          accept={uploadAcceptAttribute}
           className="sr-only"
           id={`module-file-${moduleId}`}
           onChange={(event) => {
-            setFileName(event.target.files?.[0]?.name ?? "");
-            setState("ready");
+            const file = event.target.files?.[0];
+            setFileName(file?.name ?? "");
+            setFileMeta(file ? formatFileSize(file.size) : "");
             setMessage("");
+            if (!file) {
+              setState("idle");
+              return;
+            }
+
+            const fileValidation = validateUploadFile(file);
+            if (!fileValidation.ok) {
+              setState("error");
+              setMessage(fileValidation.error);
+              return;
+            }
+
+            setState("ready");
           }}
           type="file"
         />
@@ -85,6 +120,9 @@ export function ModuleFileUploadForm({ moduleId, moduleName }: ModuleFileUploadF
           {message}
         </p>
       ) : null}
+      <p className="mt-2 text-xs leading-5 text-[var(--muted)]">
+        {fileMeta ? `${fileMeta}. ` : ""}Разрешены: {allowedUploadExtensionsLabel}. До {maxUploadSizeLabel}.
+      </p>
     </div>
   );
 }

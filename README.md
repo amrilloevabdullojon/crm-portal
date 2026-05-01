@@ -131,6 +131,7 @@ The clinic page also contains the admin handoff actions:
 
 Managers can also manually sync an amoCRM deal from `/admin`, and retry failed or ignored amoCRM events from `/admin/events`.
 amoCRM target statuses are stored in DB settings after the first save in `/admin/settings`; Vercel env remains the fallback.
+Auth attempts are written to `activity_log`, Slack delivery is tracked in `integration_events`, and client uploads are limited to common document/image formats up to 50 MB.
 
 ## Useful Commands
 

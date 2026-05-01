@@ -113,6 +113,14 @@ export function EmptyState({ children }: { children: ReactNode }) {
   return <div className="px-5 py-10 text-center text-sm leading-6 text-[var(--muted)]">{children}</div>;
 }
 
+export function Notice({ children, tone = "info" }: { children: ReactNode; tone?: Tone }) {
+  return (
+    <div className={`rounded-md border px-4 py-3 text-sm leading-6 ${toneClasses[tone]}`}>
+      {children}
+    </div>
+  );
+}
+
 export function TextLink({ children, href }: { children: ReactNode; href: string }) {
   return (
     <Link className="text-sm font-semibold text-[var(--primary)] transition hover:text-[var(--primary-dark)]" href={href}>

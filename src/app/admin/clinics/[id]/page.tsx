@@ -12,7 +12,7 @@ import { getSession } from "@/lib/auth/session";
 import { getSlaSummary } from "@/lib/sla";
 import { hasSlackConfig } from "@/lib/slack/client";
 import { LogoutButton } from "@/components/logout-button";
-import { Badge, ButtonLink, EmptyState, PageShell, Panel, ProgressBar, StatCard, TextLink } from "@/components/ui";
+import { Badge, ButtonLink, EmptyState, Notice, PageShell, Panel, ProgressBar, StatCard, TextLink } from "@/components/ui";
 
 const moduleStatusTone: Record<ModuleStatus, "neutral" | "info" | "success" | "warning"> = {
   collection: "neutral",
@@ -34,7 +34,13 @@ function isGeneralInfoName(name: string) {
   return normalized.includes("общ") || normalized.includes("general");
 }
 
-export default async function AdminClinicPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function AdminClinicPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const session = await getSession();
 
   if (!session) {
@@ -46,6 +52,9 @@ export default async function AdminClinicPage({ params }: { params: Promise<{ id
   }
 
   const { id } = await params;
+  const query = await searchParams;
+  const notice = typeof query.notice === "string" ? query.notice : "";
+  const error = typeof query.error === "string" ? query.error : "";
   const clinicId = Number(id);
 
   if (!Number.isFinite(clinicId)) notFound();
@@ -66,6 +75,8 @@ export default async function AdminClinicPage({ params }: { params: Promise<{ id
     <PageShell>
       <div className="flex flex-col gap-6">
         <TextLink href="/admin">Назад в админку</TextLink>
+        {notice ? <Notice tone="success">{notice}</Notice> : null}
+        {error ? <Notice tone="danger">{error}</Notice> : null}
 
         <header className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">

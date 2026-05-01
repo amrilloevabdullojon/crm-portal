@@ -10,9 +10,22 @@ import { getIntegrationEventForRetry, updateIntegrationEvent } from "@/lib/db/in
 import { acceptModule, logModuleActivity, requestModuleRevision } from "@/lib/db/modules";
 import { getUserDisplayName } from "@/lib/db/users";
 import { requireRole } from "@/lib/auth/guards";
+import { deliverSlackMessage } from "@/lib/slack/client";
 import { sendAccessRequestToSlack, sendSetupRequestToSlack } from "@/lib/slack/requests";
 
 type AdminClinic = NonNullable<Awaited<ReturnType<typeof getAdminClinic>>>;
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Неизвестная ошибка.";
+}
+
+function adminErrorRedirect(path: string, error: unknown): never {
+  redirect(`${path}?error=${encodeURIComponent(errorMessage(error))}`);
+}
+
+function adminNoticeRedirect(path: string, notice: string): never {
+  redirect(`${path}?notice=${encodeURIComponent(notice)}`);
+}
 
 export async function acceptModuleAction(formData: FormData) {
   const session = await requireRole(["admin", "manager"]);
@@ -150,29 +163,41 @@ export async function syncAmoDealAction(formData: FormData) {
   const dealId = Number(formData.get("dealId"));
 
   if (!Number.isFinite(dealId)) {
-    throw new Error("Invalid amoCRM deal id.");
+    adminErrorRedirect("/admin", new Error("Введите корректный amoCRM deal id."));
   }
 
-  const result = await syncAmoDealToPortal({
-    dealId,
-    writeAmoNote: true,
-    notePrefix: "DMED Portal: сделка синхронизирована вручную менеджером.",
-  });
+  let clinicId: number | null = null;
+  try {
+    const result = await syncAmoDealToPortal({
+      dealId,
+      writeAmoNote: true,
+      notePrefix: "DMED Portal: сделка синхронизирована вручную менеджером.",
+    });
 
-  await logModuleActivity({
-    actorUserId: session.userId,
-    clinicId: result.clinic.id,
-    action: "amo.manual_sync",
-    details: {
-      amoDealId: dealId,
-      modules: result.modules,
-      contacts: result.contacts.map((contact) => ({ id: contact.id, phone: contact.phone, role: contact.role })),
-    },
-  });
+    await logModuleActivity({
+      actorUserId: session.userId,
+      clinicId: result.clinic.id,
+      action: "amo.manual_sync",
+      details: {
+        amoDealId: dealId,
+        modules: result.modules,
+        contacts: result.contacts.map((contact) => ({ id: contact.id, phone: contact.phone, role: contact.role })),
+      },
+    });
 
-  revalidatePath("/admin");
-  revalidatePath(`/admin/clinics/${result.clinic.id}`);
-  redirect(`/admin/clinics/${result.clinic.id}`);
+    revalidatePath("/admin");
+    revalidatePath(`/admin/clinics/${result.clinic.id}`);
+    clinicId = result.clinic.id;
+  } catch (error) {
+    await logModuleActivity({
+      actorUserId: session.userId,
+      action: "amo.manual_sync_failed",
+      details: { amoDealId: dealId, error: errorMessage(error) },
+    });
+    adminErrorRedirect("/admin", error);
+  }
+
+  adminNoticeRedirect(`/admin/clinics/${clinicId}`, "Сделка amoCRM синхронизирована.");
 }
 
 export async function retryIntegrationEventAction(formData: FormData) {
@@ -180,40 +205,69 @@ export async function retryIntegrationEventAction(formData: FormData) {
   const eventId = Number(formData.get("eventId"));
 
   if (!Number.isFinite(eventId)) {
-    throw new Error("Invalid event id.");
+    adminErrorRedirect("/admin/events", new Error("Некорректный event id."));
   }
 
   const event = await getIntegrationEventForRetry(eventId);
   if (!event) {
-    throw new Error("Integration event not found.");
+    adminErrorRedirect("/admin/events", new Error("Событие не найдено."));
   }
 
-  if (event.provider !== "amo") {
-    throw new Error("Retry is currently supported only for amoCRM events.");
+  let successRedirectPath = "/admin/events";
+  let successNotice = "Событие повторно обработано.";
+  try {
+    if (event.provider === "slack") {
+      const text = typeof event.payload.text === "string" ? event.payload.text : "";
+      if (!text) throw new Error("Slack event does not contain message text.");
+
+      await deliverSlackMessage(text);
+      await updateIntegrationEvent({ id: event.id, status: "processed" });
+      await logModuleActivity({
+        actorUserId: session.userId,
+        action: "integration_event.retried",
+        details: { eventId, provider: event.provider },
+      });
+
+      revalidatePath("/admin/events");
+      successNotice = "Slack событие повторно отправлено.";
+    } else if (event.provider === "amo") {
+      const webhookInfo = extractAmoWebhookInfo(event.payload);
+      const dealId = Number(webhookInfo.dealId);
+
+      if (!Number.isFinite(dealId)) {
+        throw new Error("amoCRM event does not contain a valid deal id.");
+      }
+
+      const result = await syncAmoDealToPortal({
+        dealId,
+        writeAmoNote: true,
+        notePrefix: "DMED Portal: событие amoCRM повторно обработано менеджером.",
+      });
+
+      await updateIntegrationEvent({ id: event.id, status: "processed" });
+      await logModuleActivity({
+        actorUserId: session.userId,
+        clinicId: result.clinic.id,
+        action: "integration_event.retried",
+        details: { eventId, provider: event.provider, amoDealId: dealId },
+      });
+
+      revalidatePath("/admin/events");
+      revalidatePath("/admin");
+      successRedirectPath = `/admin/clinics/${result.clinic.id}`;
+      successNotice = "Событие amoCRM повторно обработано.";
+    } else {
+      throw new Error("Повтор пока поддерживается для amoCRM и Slack.");
+    }
+  } catch (error) {
+    await updateIntegrationEvent({ id: event.id, status: "failed", errorMessage: errorMessage(error) });
+    await logModuleActivity({
+      actorUserId: session.userId,
+      action: "integration_event.retry_failed",
+      details: { eventId, provider: event.provider, error: errorMessage(error) },
+    });
+    adminErrorRedirect("/admin/events", error);
   }
 
-  const webhookInfo = extractAmoWebhookInfo(event.payload);
-  const dealId = Number(webhookInfo.dealId);
-
-  if (!Number.isFinite(dealId)) {
-    throw new Error("amoCRM event does not contain a valid deal id.");
-  }
-
-  const result = await syncAmoDealToPortal({
-    dealId,
-    writeAmoNote: true,
-    notePrefix: "DMED Portal: событие amoCRM повторно обработано менеджером.",
-  });
-
-  await updateIntegrationEvent({ id: event.id, status: "processed" });
-  await logModuleActivity({
-    actorUserId: session.userId,
-    clinicId: result.clinic.id,
-    action: "integration_event.retried",
-    details: { eventId, provider: event.provider, amoDealId: dealId },
-  });
-
-  revalidatePath("/admin/events");
-  revalidatePath("/admin");
-  redirect(`/admin/clinics/${result.clinic.id}`);
+  adminNoticeRedirect(successRedirectPath, successNotice);
 }

@@ -3,7 +3,7 @@ import { listIntegrationEvents, type IntegrationEventRow } from "@/lib/db/admin"
 import { retryIntegrationEventAction } from "@/app/admin/actions";
 import { getSession } from "@/lib/auth/session";
 import { LogoutButton } from "@/components/logout-button";
-import { Badge, ButtonLink, EmptyState, PageShell, Panel, StatCard, TextLink } from "@/components/ui";
+import { Badge, ButtonLink, EmptyState, Notice, PageShell, Panel, StatCard, TextLink } from "@/components/ui";
 
 const eventStatusTone: Record<IntegrationEventRow["status"], "neutral" | "info" | "success" | "danger"> = {
   received: "info",
@@ -20,7 +20,11 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
-export default async function AdminEventsPage() {
+export default async function AdminEventsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const session = await getSession();
 
   if (!session) {
@@ -31,6 +35,9 @@ export default async function AdminEventsPage() {
     redirect("/portal");
   }
 
+  const params = await searchParams;
+  const notice = typeof params.notice === "string" ? params.notice : "";
+  const error = typeof params.error === "string" ? params.error : "";
   const events = await listIntegrationEvents(80);
   const failed = events.filter((event) => event.status === "failed").length;
   const processed = events.filter((event) => event.status === "processed").length;
@@ -56,6 +63,9 @@ export default async function AdminEventsPage() {
             </div>
           </div>
         </header>
+
+        {notice ? <Notice tone="success">{notice}</Notice> : null}
+        {error ? <Notice tone="danger">{error}</Notice> : null}
 
         <div className="grid gap-4 md:grid-cols-4">
           <StatCard hint="Последние 80 записей" label="Всего событий" tone="info" value={events.length} />
@@ -92,7 +102,7 @@ export default async function AdminEventsPage() {
                     </td>
                     <td className="hidden px-5 py-4 text-[var(--muted)] sm:table-cell">{formatDate(event.createdAt)}</td>
                     <td className="px-5 py-4">
-                      {event.provider === "amo" && event.status !== "processed" ? (
+                      {(event.provider === "amo" || event.provider === "slack") && event.status !== "processed" ? (
                         <form action={retryIntegrationEventAction}>
                           <input name="eventId" type="hidden" value={event.id} />
                           <button className="h-9 rounded-md border border-[var(--border)] bg-white px-3 text-xs font-semibold transition hover:bg-slate-50" type="submit">

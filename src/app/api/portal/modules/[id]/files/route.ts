@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
+import { createActivityLog } from "@/lib/db/activity";
 import { getModuleUploadContext, recordModuleUpload } from "@/lib/db/files";
 import { hasSupabaseAdminConfig } from "@/lib/db/supabase";
 import { hasGoogleDriveConfig, uploadModuleFileToDrive } from "@/lib/google-drive/client";
 import { authErrorResponse, requireSession } from "@/lib/auth/guards";
+import { validateUploadFile } from "@/lib/file-policy";
 
 export const runtime = "nodejs";
 
@@ -21,6 +23,22 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
     if (!(file instanceof File)) {
       return NextResponse.json({ ok: false, error: "File is required." }, { status: 400 });
+    }
+
+    const fileValidation = validateUploadFile(file);
+    if (!fileValidation.ok) {
+      await createActivityLog({
+        actorUserId: session.userId,
+        moduleId,
+        action: "module.upload_rejected",
+        details: {
+          reason: "invalid_file",
+          fileName: file.name,
+          fileSizeBytes: file.size,
+          error: fileValidation.error,
+        },
+      });
+      return NextResponse.json({ ok: false, error: fileValidation.error }, { status: 400 });
     }
 
     if (!hasSupabaseAdminConfig() || !hasGoogleDriveConfig()) {
@@ -44,10 +62,24 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     }
 
     if (session.role === "client" && session.clinicId !== moduleContext.clinicId) {
+      await createActivityLog({
+        actorUserId: session.userId,
+        clinicId: moduleContext.clinicId,
+        moduleId,
+        action: "module.upload_rejected",
+        details: { reason: "forbidden" },
+      });
       return NextResponse.json({ ok: false, error: "Forbidden." }, { status: 403 });
     }
 
     if (moduleContext.status === "accepted") {
+      await createActivityLog({
+        actorUserId: session.userId,
+        clinicId: moduleContext.clinicId,
+        moduleId,
+        action: "module.upload_rejected",
+        details: { reason: "accepted_module_locked" },
+      });
       return NextResponse.json(
         { ok: false, error: "Этот модуль уже принят. Повторная загрузка заблокирована." },
         { status: 409 },
