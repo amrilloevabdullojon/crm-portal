@@ -88,6 +88,7 @@ export default async function AdminClinicPage({ params }: { params: Promise<{ id
                   Папка Drive
                 </a>
               ) : null}
+              {session.role === "admin" ? <ButtonLink href="/admin/settings">Настройки</ButtonLink> : null}
               {session.role === "admin" ? <ButtonLink href="/admin/users">Пользователи</ButtonLink> : null}
               <ButtonLink href="/admin/events">События</ButtonLink>
               <LogoutButton />

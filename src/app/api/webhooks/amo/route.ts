@@ -2,10 +2,10 @@ import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import {
   extractAmoWebhookInfo,
-  getAmoTargetStatusIds,
 } from "@/lib/amocrm/parser";
 import { syncAmoDealToPortal } from "@/lib/amocrm/sync";
 import { createIntegrationEvent, updateIntegrationEvent } from "@/lib/db/integration-events";
+import { getAmoStatusSettings } from "@/lib/db/settings";
 
 export const runtime = "nodejs";
 
@@ -73,7 +73,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, ignored: true, reason: "missing_deal_id" });
     }
 
-    const targetStatusIds = getAmoTargetStatusIds();
+    const { targetStatusIds } = await getAmoStatusSettings();
     const isTargetStatus = targetStatusIds.some((statusId) => String(webhookInfo.statusId) === String(statusId));
     if (targetStatusIds.length > 0 && webhookInfo.statusId && !isTargetStatus) {
       await updateIntegrationEvent({

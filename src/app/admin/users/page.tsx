@@ -58,6 +58,7 @@ export default async function AdminUsersPage() {
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
+              <ButtonLink href="/admin/settings">Настройки</ButtonLink>
               <ButtonLink href="/admin/events">События</ButtonLink>
               <LogoutButton />
             </div>

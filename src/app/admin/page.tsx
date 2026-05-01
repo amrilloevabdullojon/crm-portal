@@ -98,6 +98,7 @@ export default async function AdminPage({
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
+              {session.role === "admin" ? <ButtonLink href="/admin/settings">Настройки</ButtonLink> : null}
               {session.role === "admin" ? <ButtonLink href="/admin/users">Пользователи</ButtonLink> : null}
               <ButtonLink href="/portal">Портал</ButtonLink>
               <ButtonLink href="/admin/events">События</ButtonLink>
