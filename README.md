@@ -117,6 +117,7 @@ If a user tries to log in before linking Telegram, the login form shows a link t
 
 `/portal` shows the clinic progress, urgent client actions, SLA status, current files, and recent uploaded versions per module.
 Accepted modules are locked from repeat uploads; modules with revisions show the manager comment and move back to review after a new upload.
+The client timeline shows only safe module events: uploads, accepted files, and revision requests.
 
 ## Admin
 

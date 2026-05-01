@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { clinicStatuses, moduleStatuses, type ModuleStatus, type PortalModule } from "@/lib/domain";
+import { listPortalActivityLog, type ActivityLogRow } from "@/lib/db/activity";
 import { getPortalClinic } from "@/lib/db/clinics";
 import { ModuleFileUploadForm } from "@/app/portal/module-file-upload-form";
 import { getSession } from "@/lib/auth/session";
@@ -49,6 +50,46 @@ function getActionTitle(module: PortalModule) {
   return "Готово";
 }
 
+function detailText(details: Record<string, unknown>, key: string) {
+  const value = details[key];
+  return typeof value === "string" ? value : "";
+}
+
+function getActivityView(activity: ActivityLogRow): {
+  title: string;
+  description: string;
+  source: string;
+  tone: "info" | "success" | "warning";
+} {
+  const moduleName = activity.moduleName ?? "Модуль";
+  const fileName = detailText(activity.details, "fileName");
+
+  if (activity.action === "module.file_uploaded") {
+    return {
+      title: "Файл загружен",
+      description: fileName ? `${moduleName}: ${fileName}` : `${moduleName}: файл отправлен на проверку.`,
+      source: "Клиент",
+      tone: "info",
+    };
+  }
+
+  if (activity.action === "module.accepted") {
+    return {
+      title: "Файл принят",
+      description: fileName ? `${moduleName}: ${fileName}` : `${moduleName}: данные приняты.`,
+      source: "DMED",
+      tone: "success",
+    };
+  }
+
+  return {
+    title: "Нужны правки",
+    description: detailText(activity.details, "comment") || `${moduleName}: менеджер оставил комментарий.`,
+    source: "DMED",
+    tone: "warning",
+  };
+}
+
 export default async function PortalPage() {
   const session = await getSession();
 
@@ -56,7 +97,11 @@ export default async function PortalPage() {
     redirect("/login?next=/portal");
   }
 
-  const clinic = await getPortalClinic(session.clinicId ?? 1);
+  const clinicId = session.clinicId ?? 1;
+  const [clinic, activityLog] = await Promise.all([
+    getPortalClinic(clinicId),
+    listPortalActivityLog({ clinicId, limit: 12 }),
+  ]);
   const acceptedCount = clinic.modules.filter((module) => module.status === "accepted").length;
   const reviewCount = clinic.modules.filter((module) => module.status === "review").length;
   const revisionCount = clinic.modules.filter((module) => module.status === "needs_revision").length;
@@ -224,6 +269,40 @@ export default async function PortalPage() {
               );
             })}
             {clinic.modules.length === 0 ? <div className="p-8 text-center text-sm text-[var(--muted)]">Модули пока не настроены.</div> : null}
+          </div>
+        </Panel>
+
+        <Panel title="История действий">
+          <div className="divide-y divide-[var(--border)]">
+            {activityLog.map((activity) => {
+              const view = getActivityView(activity);
+
+              return (
+                <div key={activity.id} className="grid gap-3 p-5 sm:grid-cols-[auto_1fr_auto] sm:items-start">
+                  <div
+                    className={`mt-1 h-2.5 w-2.5 rounded-full ${
+                      view.tone === "success"
+                        ? "bg-[var(--success)]"
+                        : view.tone === "warning"
+                          ? "bg-[var(--warning)]"
+                          : "bg-[var(--primary)]"
+                    }`}
+                  />
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="font-semibold">{view.title}</div>
+                      {activity.moduleName ? <Badge tone={view.tone}>{activity.moduleName}</Badge> : null}
+                    </div>
+                    <p className="mt-1 break-words text-sm leading-6 text-[var(--muted)]">{view.description}</p>
+                    <div className="mt-1 text-xs text-[var(--muted)]">Источник: {view.source}</div>
+                  </div>
+                  <time className="text-xs font-semibold text-[var(--muted)]" dateTime={activity.createdAt}>
+                    {formatDate(activity.createdAt)}
+                  </time>
+                </div>
+              );
+            })}
+            {activityLog.length === 0 ? <EmptyState>История появится после первой загрузки, проверки или комментария по файлу.</EmptyState> : null}
           </div>
         </Panel>
       </div>
