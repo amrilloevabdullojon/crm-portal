@@ -16,17 +16,29 @@ export type UserRole = "client" | "manager" | "admin";
 export type ClinicStatus = keyof typeof clinicStatuses;
 export type ModuleStatus = keyof typeof moduleStatuses;
 
+export type PortalModuleFile = {
+  id?: number;
+  fileName: string;
+  fileUrl: string;
+  fileSizeBytes?: number | null;
+  isCurrent: boolean;
+  createdAt: string;
+};
+
 export type PortalModule = {
   id: number;
   name: string;
   status: ModuleStatus;
   managerComment?: string;
   currentFileUrl?: string;
+  currentFile?: PortalModuleFile;
+  files?: PortalModuleFile[];
 };
 
 export type PortalClinic = {
   id: number;
   name: string;
   status: ClinicStatus;
+  slaStartedAt?: string;
   modules: PortalModule[];
 };

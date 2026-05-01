@@ -113,6 +113,11 @@ Users must link Telegram before production login can deliver one-time codes:
 The app stores the Telegram chat id in `users.telegram_chat_id`.
 If a user tries to log in before linking Telegram, the login form shows a link to the bot from `TELEGRAM_BOT_USERNAME`.
 
+## Client Portal
+
+`/portal` shows the clinic progress, urgent client actions, SLA status, current files, and recent uploaded versions per module.
+Accepted modules are locked from repeat uploads; modules with revisions show the manager comment and move back to review after a new upload.
+
 ## Admin
 
 Admin users can use:

@@ -1,10 +1,11 @@
 import { redirect } from "next/navigation";
-import { clinicStatuses, moduleStatuses, type ModuleStatus } from "@/lib/domain";
+import { clinicStatuses, moduleStatuses, type ModuleStatus, type PortalModule } from "@/lib/domain";
 import { getPortalClinic } from "@/lib/db/clinics";
 import { ModuleFileUploadForm } from "@/app/portal/module-file-upload-form";
 import { getSession } from "@/lib/auth/session";
+import { getSlaSummary } from "@/lib/sla";
 import { LogoutButton } from "@/components/logout-button";
-import { Badge, ButtonLink, PageShell, Panel, ProgressBar, StatCard } from "@/components/ui";
+import { Badge, ButtonLink, EmptyState, Notice, PageShell, Panel, ProgressBar, StatCard } from "@/components/ui";
 
 const moduleTone: Record<ModuleStatus, "neutral" | "info" | "success" | "warning"> = {
   collection: "neutral",
@@ -12,6 +13,41 @@ const moduleTone: Record<ModuleStatus, "neutral" | "info" | "success" | "warning
   needs_revision: "warning",
   accepted: "success",
 };
+
+function formatDate(value?: string | null) {
+  if (!value) return "—";
+
+  return new Intl.DateTimeFormat("ru-RU", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Asia/Tashkent",
+  }).format(new Date(value));
+}
+
+function formatFileSize(bytes?: number | null) {
+  if (!bytes) return "размер не указан";
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function getCurrentFile(module: PortalModule) {
+  return module.currentFile ?? module.files?.find((file) => file.isCurrent) ?? module.files?.[0];
+}
+
+function getModuleHint(module: PortalModule) {
+  if (module.status === "accepted") return "Файл принят. Новая версия не требуется.";
+  if (module.status === "needs_revision") return "Исправьте файл по комментарию и загрузите новую версию.";
+  if (module.status === "review") return "Файл на проверке. Если нашли ошибку, можно заменить новой версией.";
+  if (getCurrentFile(module)) return "Файл загружен. Можно заменить актуальной версией.";
+  return "Загрузите файл, чтобы менеджер смог начать проверку.";
+}
+
+function getActionTitle(module: PortalModule) {
+  if (module.status === "needs_revision") return "Нужны правки";
+  if (module.status === "collection" && !getCurrentFile(module)) return "Ожидаем файл";
+  if (module.status === "review") return "На проверке";
+  return "Готово";
+}
 
 export default async function PortalPage() {
   const session = await getSession();
@@ -24,8 +60,13 @@ export default async function PortalPage() {
   const acceptedCount = clinic.modules.filter((module) => module.status === "accepted").length;
   const reviewCount = clinic.modules.filter((module) => module.status === "review").length;
   const revisionCount = clinic.modules.filter((module) => module.status === "needs_revision").length;
-  const uploadedCount = clinic.modules.filter((module) => module.currentFileUrl).length;
+  const uploadNeededCount = clinic.modules.filter((module) => module.status === "collection" && !getCurrentFile(module)).length;
+  const uploadedCount = clinic.modules.filter((module) => getCurrentFile(module)).length;
   const progress = clinic.modules.length > 0 ? Math.round((acceptedCount / clinic.modules.length) * 100) : 0;
+  const sla = getSlaSummary(clinic.slaStartedAt);
+  const actionModules = clinic.modules
+    .filter((module) => module.status === "needs_revision" || (module.status === "collection" && !getCurrentFile(module)))
+    .slice(0, 4);
 
   return (
     <PageShell>
@@ -50,12 +91,52 @@ export default async function PortalPage() {
           </div>
         </header>
 
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-5">
           <StatCard hint={clinicStatuses[clinic.status] ?? clinic.status} label="Статус клиники" tone="info" value={clinic.status === "completed" ? "Готово" : "В работе"} />
           <StatCard hint={`${acceptedCount} из ${clinic.modules.length}`} label="Принято" tone="success" value={acceptedCount} />
           <StatCard hint={revisionCount ? "Нужна реакция" : "Без срочных правок"} label="Правки" tone={revisionCount ? "warning" : "neutral"} value={revisionCount} />
-          <StatCard hint={`${uploadedCount} модулей с файлами`} label="Файлы" tone="neutral" value={uploadedCount} />
+          <StatCard hint={uploadNeededCount ? "Нужно загрузить" : `${uploadedCount} модулей с файлами`} label="Ожидаем файлы" tone={uploadNeededCount ? "warning" : "neutral"} value={uploadNeededCount} />
+          <StatCard
+            hint={sla.active && sla.dueAt ? `До ${formatDate(sla.dueAt)}` : "Запустится после принятия общей информации"}
+            label="SLA"
+            tone={sla.overdue ? "danger" : sla.active ? "info" : "neutral"}
+            value={sla.active ? (sla.overdue ? "Просрочен" : `${sla.remainingBusinessDays} дн.`) : "Не запущен"}
+          />
         </div>
+
+        {revisionCount ? (
+          <Notice tone="warning">
+            Есть модули с правками. Откройте комментарий менеджера, загрузите новую версию, и статус автоматически вернется на проверку.
+          </Notice>
+        ) : null}
+        {!revisionCount && reviewCount ? (
+          <Notice tone="info">
+            {reviewCount} модулей сейчас на проверке. Когда менеджер примет файл или оставит комментарий, статус обновится здесь.
+          </Notice>
+        ) : null}
+        {progress === 100 ? <Notice tone="success">Все модули приняты. Повторная загрузка заблокирована для принятых блоков.</Notice> : null}
+
+        <Panel title="Что сейчас важно">
+          <div className="grid gap-3 p-5 md:grid-cols-2 xl:grid-cols-4">
+            {actionModules.map((module) => (
+              <div key={module.id} className="rounded-md border border-[var(--border)] bg-slate-50 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--muted)]">{getActionTitle(module)}</div>
+                  <Badge tone={moduleTone[module.status]}>{moduleStatuses[module.status]}</Badge>
+                </div>
+                <div className="mt-3 text-base font-semibold">{module.name}</div>
+                <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{getModuleHint(module)}</p>
+              </div>
+            ))}
+            {actionModules.length === 0 ? (
+              <div className="md:col-span-2 xl:col-span-4">
+                <EmptyState>
+                  {reviewCount ? "С вашей стороны срочных действий нет. Файлы находятся на проверке." : "Сейчас нет срочных действий по загрузке файлов."}
+                </EmptyState>
+              </div>
+            ) : null}
+          </div>
+        </Panel>
 
         <Panel title="Модули внедрения">
           <div className="grid gap-3 border-b border-[var(--border)] bg-slate-50 p-5 md:grid-cols-4">
@@ -70,59 +151,81 @@ export default async function PortalPage() {
             ))}
           </div>
           <div className="divide-y divide-[var(--border)]">
-            {clinic.modules.map((module) => (
-              <article key={module.id} className="p-5">
-                <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-start">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="text-lg font-semibold">{module.name}</h2>
-                      <Badge tone={moduleTone[module.status]}>{moduleStatuses[module.status]}</Badge>
-                    </div>
-                    {module.managerComment ? (
-                      <div className="mt-3 rounded-md border border-amber-100 bg-amber-50 px-3 py-2">
-                        <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--warning)]">Комментарий менеджера</div>
-                        <p className="mt-1 text-sm leading-6 text-[var(--warning)]">{module.managerComment}</p>
+            {clinic.modules.map((module) => {
+              const currentFile = getCurrentFile(module);
+              const files = module.files ?? [];
+
+              return (
+                <article key={module.id} className="p-5">
+                  <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-start">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="text-lg font-semibold">{module.name}</h2>
+                        <Badge tone={moduleTone[module.status]}>{moduleStatuses[module.status]}</Badge>
+                        {files.length ? <span className="text-xs font-semibold text-[var(--muted)]">Версий: {files.length}</span> : null}
                       </div>
-                    ) : null}
-                    <p className="mt-2 text-sm text-[var(--muted)]">
-                      {module.status === "accepted"
-                        ? "Файл принят менеджером. Новая версия не требуется."
-                        : module.currentFileUrl
-                          ? "Файл загружен. Можно заменить актуальной версией."
-                          : "Загрузите файл для проверки менеджером."}
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                  {module.status === "accepted" ? (
-                    <div className="rounded-md border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm font-semibold text-[var(--success)]">
-                      Модуль принят. Повторная загрузка заблокирована.
+                      <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{getModuleHint(module)}</p>
+                      {module.managerComment ? (
+                        <div className="mt-3 rounded-md border border-amber-100 bg-amber-50 px-3 py-2">
+                          <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--warning)]">Комментарий менеджера</div>
+                          <p className="mt-1 text-sm leading-6 text-[var(--warning)]">{module.managerComment}</p>
+                        </div>
+                      ) : null}
                     </div>
-                  ) : (
-                    <ModuleFileUploadForm moduleId={module.id} moduleName={module.name} />
-                  )}
-                  {module.currentFileUrl ? (
-                    <a
-                      className="inline-flex h-10 items-center justify-center rounded-md border border-[var(--border)] bg-white px-4 text-sm font-semibold transition hover:border-slate-300 hover:bg-slate-50"
-                      href={module.currentFileUrl}
-                      rel="noreferrer"
-                      target="_blank"
-                    >
-                      Открыть файл
-                    </a>
+                  </div>
+
+                  {currentFile ? (
+                    <div className="mt-4 rounded-md border border-[var(--border)] bg-slate-50 p-4">
+                      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div className="min-w-0">
+                          <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--muted)]">Текущий файл</div>
+                          <a className="mt-1 block truncate text-sm font-semibold text-[var(--primary)]" href={currentFile.fileUrl} rel="noreferrer" target="_blank">
+                            {currentFile.fileName}
+                          </a>
+                          <div className="mt-1 text-xs text-[var(--muted)]">
+                            Загружен: {formatDate(currentFile.createdAt)} · {formatFileSize(currentFile.fileSizeBytes)}
+                          </div>
+                        </div>
+                        <a
+                          className="inline-flex h-10 items-center justify-center rounded-md border border-[var(--border)] bg-white px-4 text-sm font-semibold transition hover:border-slate-300 hover:bg-slate-50"
+                          href={currentFile.fileUrl}
+                          rel="noreferrer"
+                          target="_blank"
+                        >
+                          Открыть файл
+                        </a>
+                      </div>
+                      {files.length > 1 ? (
+                        <div className="mt-4 border-t border-[var(--border)] pt-3">
+                          <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--muted)]">Последние версии</div>
+                          <div className="mt-2 grid gap-2">
+                            {files.slice(0, 3).map((file) => (
+                              <a key={`${module.id}-${file.id ?? file.fileName}`} className="flex min-w-0 items-center justify-between gap-3 text-xs text-[var(--muted)] hover:text-[var(--primary)]" href={file.fileUrl} rel="noreferrer" target="_blank">
+                                <span className="truncate">{file.fileName}</span>
+                                <span className="shrink-0">{formatDate(file.createdAt)}</span>
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
                   ) : null}
-                </div>
-              </article>
-            ))}
+
+                  <div className="mt-4">
+                    {module.status === "accepted" ? (
+                      <div className="rounded-md border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm font-semibold text-[var(--success)]">
+                        Модуль принят. Повторная загрузка заблокирована.
+                      </div>
+                    ) : (
+                      <ModuleFileUploadForm moduleId={module.id} moduleName={module.name} />
+                    )}
+                  </div>
+                </article>
+              );
+            })}
             {clinic.modules.length === 0 ? <div className="p-8 text-center text-sm text-[var(--muted)]">Модули пока не настроены.</div> : null}
           </div>
         </Panel>
-
-        {reviewCount > 0 ? (
-          <div className="rounded-md border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-[var(--primary)]">
-            {reviewCount} модулей сейчас на проверке у менеджера.
-          </div>
-        ) : null}
       </div>
     </PageShell>
   );
