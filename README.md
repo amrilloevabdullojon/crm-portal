@@ -150,6 +150,7 @@ Non-OTP Telegram notifications are tracked in `integration_events` and can be re
 ```bash
 npm run check:env
 npm run lint
+npm run test
 npm run build
 npm run import:legacy -- --file ./legacy.csv
 ```

@@ -35,3 +35,5 @@
 - Move integration settings into a dedicated settings table.
 - Add focused tests for auth, uploads, portal activity, and integration retries.
 - Add stronger session/security controls such as global logout.
+
+Initial hardening now includes `integration_settings` for DB-backed integration configuration and a small `node --test` suite for settings parsing.
