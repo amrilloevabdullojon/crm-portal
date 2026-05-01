@@ -1,13 +1,16 @@
 import Link from "next/link";
-import { ButtonLink, PageShell, Panel, ProgressBar } from "@/components/ui";
+import { ButtonLink, ProgressBar } from "@/components/ui";
+import { MotionPageShell as PageShell, MotionPanel as Panel } from "@/components/motion-ui";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { CheckCircle2, ShieldCheck, Database, FileUp, Webhook, Activity } from "lucide-react";
 
 export default function Home() {
   const features = [
-    { label: "Авторизация через Telegram", status: "готово" },
-    { label: "Кабинет клиники", status: "готово" },
-    { label: "Загрузка файлов в Google Drive", status: "готово" },
-    { label: "Очередь проверки менеджером", status: "готово" },
-    { label: "Webhook amoCRM и Telegram", status: "готово" },
+    { label: "Авторизация через Telegram", status: "готово", icon: <ShieldCheck className="w-4 h-4 text-slate-500" /> },
+    { label: "Кабинет клиники", status: "готово", icon: <Database className="w-4 h-4 text-slate-500" /> },
+    { label: "Загрузка файлов в Google Drive", status: "готово", icon: <FileUp className="w-4 h-4 text-slate-500" /> },
+    { label: "Очередь проверки менеджером", status: "готово", icon: <CheckCircle2 className="w-4 h-4 text-slate-500" /> },
+    { label: "Webhook amoCRM и Telegram", status: "готово", icon: <Webhook className="w-4 h-4 text-slate-500" /> },
   ];
 
   return (
@@ -18,14 +21,15 @@ export default function Home() {
             <div className="text-xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600">DMED Portal</div>
             <div className="text-sm font-medium text-[var(--muted)] mt-1">Кабинет клиник и рабочее место менеджера</div>
           </div>
-          <div className="flex gap-3 text-sm font-medium">
+          <div className="flex flex-wrap items-center gap-3 text-sm font-medium">
+            <ThemeToggle />
             <ButtonLink href="/login">Войти</ButtonLink>
             <ButtonLink href="/admin" variant="primary">Админка</ButtonLink>
           </div>
         </nav>
 
         <div className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr]">
-          <Panel className="p-6 sm:p-8">
+          <Panel className="p-6 sm:p-8" delay={0.1}>
             <h1 className="max-w-3xl text-4xl font-extrabold leading-tight tracking-tight sm:text-6xl bg-clip-text text-transparent bg-gradient-to-r from-slate-900 via-slate-800 to-slate-600 pb-2">
               Единый портал для запуска клиник DMED.
             </h1>
@@ -40,13 +44,14 @@ export default function Home() {
             </div>
           </Panel>
 
-          <Panel className="p-6">
+          <Panel className="p-6" delay={0.2}>
             <div className="flex items-center justify-between gap-4">
               <div>
                 <div className="text-sm font-bold uppercase tracking-wider text-[var(--muted)]">Готовность MVP</div>
                 <div className="mt-2 text-4xl font-black text-slate-800">100%</div>
               </div>
-              <Link className="text-sm font-semibold text-[var(--primary)]" href="/admin/events">
+              <Link className="flex items-center gap-1.5 text-sm font-semibold text-[var(--primary)] hover:text-[var(--primary-dark)]" href="/admin/events">
+                <Activity className="w-4 h-4" />
                 Мониторинг
               </Link>
             </div>
@@ -55,9 +60,13 @@ export default function Home() {
             </div>
             <div className="mt-5 space-y-4">
               {features.map((item) => (
-                <div key={item.label} className="flex items-center justify-between gap-4 border-b border-[var(--border)] pb-3 last:border-0 hover:bg-slate-50/50 p-2 rounded-lg transition-colors">
-                  <span className="text-sm font-medium text-slate-700">{item.label}</span>
-                  <span className="rounded-full bg-[var(--success-bg)] px-3 py-1 text-xs font-bold text-[var(--success)] shadow-sm border border-emerald-100/50">
+                <div key={item.label} className="flex items-center justify-between gap-4 border-b border-[var(--border)] pb-3 last:border-0 hover:bg-slate-50/50 dark:hover:bg-slate-800/50 p-2 rounded-lg transition-colors">
+                  <div className="flex items-center gap-3">
+                    {item.icon}
+                    <span className="text-sm font-medium text-[var(--foreground)]">{item.label}</span>
+                  </div>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-[var(--success-bg)] px-3 py-1 text-xs font-bold text-[var(--success)] shadow-sm border border-emerald-100/50 dark:border-emerald-800/50">
+                    <CheckCircle2 className="w-3 h-3" />
                     {item.status}
                   </span>
                 </div>
