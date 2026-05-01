@@ -59,6 +59,7 @@ Important production variables:
 - `GOOGLE_DRIVE_ROOT_FOLDER_ID`
 - `GOOGLE_SERVICE_ACCOUNT_EMAIL`
 - `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY`
+- `SLACK_WEBHOOK_URL` or `SLACK_BOT_TOKEN` + `SLACK_ADMIN_CHANNEL_ID`
 
 Current target statuses:
 
@@ -119,6 +120,11 @@ Admin users can use:
 - `/admin/clinics/<id>` for clinic contacts, files, and module actions;
 - `/admin/events` for integration monitoring;
 - `/api/admin/events` for the same event list as JSON.
+
+The clinic page also contains the admin handoff actions:
+
+- `Выдать доступы` sends an urgent Slack request after `Общая информация` is accepted;
+- `Отправить настройку` sends the final setup request after all modules are accepted.
 
 ## Useful Commands
 

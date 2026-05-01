@@ -128,7 +128,7 @@ export async function updateModuleStatus(input: UpdateModuleStatusInput) {
 export async function logModuleActivity(input: {
   actorUserId?: number | null;
   clinicId?: number | null;
-  moduleId: number;
+  moduleId?: number | null;
   action: string;
   details?: Record<string, unknown>;
 }) {
@@ -140,7 +140,7 @@ export async function logModuleActivity(input: {
   const { error } = await supabase.from("activity_log").insert({
     actor_user_id: input.actorUserId ?? null,
     clinic_id: input.clinicId ?? null,
-    module_id: input.moduleId,
+    module_id: input.moduleId ?? null,
     action: input.action,
     details: input.details ?? {},
   });

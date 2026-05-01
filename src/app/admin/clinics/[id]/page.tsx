@@ -1,9 +1,15 @@
 import { notFound, redirect } from "next/navigation";
 import { clinicStatuses, moduleStatuses, type ModuleStatus } from "@/lib/domain";
 import { getAdminClinic } from "@/lib/db/admin";
-import { acceptModuleAction, requestRevisionAction } from "@/app/admin/actions";
+import {
+  acceptModuleAction,
+  requestRevisionAction,
+  sendAccessRequestAction,
+  sendSetupRequestAction,
+} from "@/app/admin/actions";
 import { getSession } from "@/lib/auth/session";
 import { getSlaSummary } from "@/lib/sla";
+import { hasSlackConfig } from "@/lib/slack/client";
 import { LogoutButton } from "@/components/logout-button";
 import { Badge, ButtonLink, EmptyState, PageShell, Panel, ProgressBar, StatCard, TextLink } from "@/components/ui";
 
@@ -20,6 +26,11 @@ function formatDate(value: string) {
     timeStyle: "short",
     timeZone: "Asia/Tashkent",
   }).format(new Date(value));
+}
+
+function isGeneralInfoName(name: string) {
+  const normalized = name.toLowerCase();
+  return normalized.includes("общ") || normalized.includes("general");
 }
 
 export default async function AdminClinicPage({ params }: { params: Promise<{ id: string }> }) {
@@ -45,6 +56,9 @@ export default async function AdminClinicPage({ params }: { params: Promise<{ id
   const revisionCount = clinic.modules.filter((module) => module.status === "needs_revision").length;
   const progress = clinic.modules.length > 0 ? Math.round((acceptedCount / clinic.modules.length) * 100) : 0;
   const sla = getSlaSummary(clinic.slaStartedAt);
+  const slackConfigured = hasSlackConfig();
+  const generalInfoAccepted = clinic.modules.some((module) => isGeneralInfoName(module.name) && module.status === "accepted");
+  const allModulesAccepted = clinic.modules.length > 0 && clinic.modules.every((module) => module.status === "accepted");
 
   return (
     <PageShell>
@@ -94,6 +108,55 @@ export default async function AdminClinicPage({ params }: { params: Promise<{ id
             value={sla.active ? "Активен" : "Не запущен"}
           />
         </div>
+
+        <Panel title="Передача админам">
+          <div className="grid gap-4 p-5 lg:grid-cols-2">
+            <form action={sendAccessRequestAction} className="rounded-md border border-[var(--border)] bg-slate-50 p-4">
+              <input name="clinicId" type="hidden" value={clinic.id} />
+              <div className="font-semibold">Срочная заявка на доступы</div>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
+                Отправляет админам заявку после принятия блока “Общая информация”.
+              </p>
+              <button
+                className="mt-4 h-10 rounded-md bg-[var(--primary)] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)] disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={!slackConfigured || !generalInfoAccepted}
+                type="submit"
+              >
+                Выдать доступы
+              </button>
+              {!slackConfigured ? (
+                <div className="mt-2 text-xs text-[var(--warning)]">Сначала настройте Slack env на Vercel.</div>
+              ) : !generalInfoAccepted ? (
+                <div className="mt-2 text-xs text-[var(--warning)]">Сначала примите блок “Общая информация”.</div>
+              ) : null}
+            </form>
+
+            <form action={sendSetupRequestAction} className="rounded-md border border-[var(--border)] bg-slate-50 p-4">
+              <input name="clinicId" type="hidden" value={clinic.id} />
+              <div className="font-semibold">Финальная заявка на настройку</div>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
+                Отправляет в Slack ссылку на “АКТУАЛЬНО”, список файлов и комментарий менеджера.
+              </p>
+              <textarea
+                className="mt-3 min-h-24 w-full rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm outline-none transition focus:border-[var(--primary)]"
+                name="additionalInfo"
+                placeholder="Доп. информация для админов"
+              />
+              <button
+                className="mt-3 h-10 rounded-md bg-[var(--success)] px-4 text-sm font-semibold text-white shadow-sm transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={!slackConfigured || !allModulesAccepted}
+                type="submit"
+              >
+                Отправить настройку
+              </button>
+              {!slackConfigured ? (
+                <div className="mt-2 text-xs text-[var(--warning)]">Сначала настройте Slack env на Vercel.</div>
+              ) : !allModulesAccepted ? (
+                <div className="mt-2 text-xs text-[var(--warning)]">Финальная заявка доступна после принятия всех модулей.</div>
+              ) : null}
+            </form>
+          </div>
+        </Panel>
 
         <div className="grid gap-6 lg:grid-cols-[0.7fr_1.3fr]">
           <Panel title="Контакты">

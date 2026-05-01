@@ -270,3 +270,8 @@ export async function copyModuleFileToActualFolder(input: DriveActualCopyInput) 
     actualFolderId,
   };
 }
+
+export async function getActualFolderUrl(clinicName: string) {
+  const { actualFolderId } = await ensureClinicDriveFolders(clinicName);
+  return `https://drive.google.com/drive/folders/${actualFolderId}`;
+}
