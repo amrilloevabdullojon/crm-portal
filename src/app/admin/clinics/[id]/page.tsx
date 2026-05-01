@@ -3,6 +3,7 @@ import { clinicStatuses, moduleStatuses, type ModuleStatus } from "@/lib/domain"
 import { getAdminClinic } from "@/lib/db/admin";
 import { acceptModuleAction, requestRevisionAction } from "@/app/admin/actions";
 import { getSession } from "@/lib/auth/session";
+import { getSlaSummary } from "@/lib/sla";
 import { LogoutButton } from "@/components/logout-button";
 import { Badge, ButtonLink, EmptyState, PageShell, Panel, ProgressBar, StatCard, TextLink } from "@/components/ui";
 
@@ -43,6 +44,7 @@ export default async function AdminClinicPage({ params }: { params: Promise<{ id
   const reviewCount = clinic.modules.filter((module) => module.status === "review").length;
   const revisionCount = clinic.modules.filter((module) => module.status === "needs_revision").length;
   const progress = clinic.modules.length > 0 ? Math.round((acceptedCount / clinic.modules.length) * 100) : 0;
+  const sla = getSlaSummary(clinic.slaStartedAt);
 
   return (
     <PageShell>
@@ -80,11 +82,17 @@ export default async function AdminClinicPage({ params }: { params: Promise<{ id
           </div>
         </header>
 
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-5">
           <StatCard hint="Контакты клиники" label="Пользователи" tone="info" value={clinic.users.length} />
           <StatCard hint={`${acceptedCount} из ${clinic.modules.length}`} label="Принято" tone="success" value={acceptedCount} />
           <StatCard hint="Ожидают менеджера" label="На проверке" tone={reviewCount ? "warning" : "neutral"} value={reviewCount} />
           <StatCard hint="Нужен ответ клиента" label="Правки" tone={revisionCount ? "warning" : "neutral"} value={revisionCount} />
+          <StatCard
+            hint={sla.active ? (sla.overdue ? "Просрочен" : `${sla.remainingBusinessDays} раб. дн. осталось`) : "Ждет общую информацию"}
+            label="SLA"
+            tone={sla.overdue ? "danger" : sla.active ? "info" : "neutral"}
+            value={sla.active ? "Активен" : "Не запущен"}
+          />
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[0.7fr_1.3fr]">

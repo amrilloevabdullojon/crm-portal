@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { updateModuleStatus, logModuleActivity } from "@/lib/db/modules";
+import { requestModuleRevision } from "@/lib/db/modules";
 import { authErrorResponse, requireRole } from "@/lib/auth/guards";
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
@@ -17,8 +17,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       ? body.comment.trim()
       : "Нужны правки по файлу.";
 
-    await updateModuleStatus({ moduleId, status: "needs_revision", managerComment: comment });
-    await logModuleActivity({ moduleId, actorUserId: session.userId, action: "module.revision_requested", details: { comment } });
+    await requestModuleRevision({ moduleId, actorUserId: session.userId, comment });
 
     return NextResponse.json({ ok: true });
   } catch (error) {

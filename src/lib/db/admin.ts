@@ -34,6 +34,7 @@ export type AdminClinic = {
   status: ClinicStatus;
   amoDealId?: number;
   driveFolderUrl?: string;
+  slaStartedAt?: string;
   createdAt: string;
   modules: AdminModule[];
   users: AdminClinicUser[];
@@ -94,6 +95,7 @@ type RawClinic = {
   status: ClinicStatus;
   amo_deal_id: number | null;
   drive_folder_url: string | null;
+  sla_started_at: string | null;
   created_at: string;
   clinic_modules?: RawModule[] | null;
   clinic_users?: RawClinicUser[] | null;
@@ -143,6 +145,7 @@ function mapClinic(row: RawClinic): AdminClinic {
     status: row.status,
     amoDealId: row.amo_deal_id ?? undefined,
     driveFolderUrl: row.drive_folder_url ?? undefined,
+    slaStartedAt: row.sla_started_at ?? undefined,
     createdAt: row.created_at,
     modules: (row.clinic_modules ?? []).map(mapModule).sort((left, right) => left.id - right.id),
     users: (row.clinic_users ?? [])
@@ -188,6 +191,7 @@ export async function listAdminClinics(): Promise<AdminClinic[]> {
       status,
       amo_deal_id,
       drive_folder_url,
+      sla_started_at,
       created_at,
       clinic_users (
         clinic_role,
@@ -237,6 +241,7 @@ export async function getAdminClinic(clinicId: number): Promise<AdminClinic | nu
       status,
       amo_deal_id,
       drive_folder_url,
+      sla_started_at,
       created_at,
       clinic_users (
         clinic_role,

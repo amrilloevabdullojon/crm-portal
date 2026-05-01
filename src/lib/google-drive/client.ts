@@ -17,6 +17,13 @@ export type DriveUploadResult = {
   moduleFolderId: string;
 };
 
+export type DriveActualCopyInput = {
+  clinicName: string;
+  moduleName: string;
+  sourceFileId: string;
+  fileName: string;
+};
+
 export type ClinicDriveFolders = {
   clinicFolderId: string;
   clinicFolderUrl: string;
@@ -103,6 +110,19 @@ async function getOrCreateFolder(drive: drive_v3.Drive, parentId: string, name: 
   }
 
   return response.data.id;
+}
+
+async function listFilesByNamePrefix(drive: drive_v3.Drive, parentId: string, prefix: string) {
+  const escapedPrefix = escapeDriveQueryValue(prefix);
+  const response = await drive.files.list({
+    q: `'${parentId}' in parents and name contains '${escapedPrefix}' and trashed = false`,
+    fields: "files(id,name)",
+    includeItemsFromAllDrives: true,
+    supportsAllDrives: true,
+    pageSize: 100,
+  });
+
+  return response.data.files ?? [];
 }
 
 async function ensureModuleUploadFolder(input: Pick<DriveUploadInput, "clinicName" | "moduleName">) {
@@ -210,5 +230,43 @@ export async function uploadModuleFileToDrive(input: DriveUploadInput): Promise<
     fileName: response.data.name ?? uploadFileName,
     fileUrl: response.data.webViewLink ?? `https://drive.google.com/file/d/${response.data.id}/view`,
     moduleFolderId,
+  };
+}
+
+export async function copyModuleFileToActualFolder(input: DriveActualCopyInput) {
+  if (!hasGoogleDriveConfig()) {
+    throw new Error("Google Drive env vars are not configured.");
+  }
+
+  const drive = getDriveClient();
+  const { actualFolderId } = await ensureClinicDriveFolders(input.clinicName);
+  const blockPrefix = `${safeDriveName(input.moduleName).replace(/\s+/g, "_")}_`;
+  const existingFiles = await listFilesByNamePrefix(drive, actualFolderId, blockPrefix);
+
+  await Promise.all(
+    existingFiles
+      .filter((file) => file.id)
+      .map((file) => drive.files.delete({ fileId: file.id as string, supportsAllDrives: true })),
+  );
+
+  const response = await drive.files.copy({
+    fileId: input.sourceFileId,
+    requestBody: {
+      name: safeDriveName(input.fileName),
+      parents: [actualFolderId],
+    },
+    fields: "id,name,webViewLink",
+    supportsAllDrives: true,
+  });
+
+  if (!response.data.id) {
+    throw new Error("Google Drive did not return copied file id.");
+  }
+
+  return {
+    fileId: response.data.id,
+    fileName: response.data.name ?? input.fileName,
+    fileUrl: response.data.webViewLink ?? `https://drive.google.com/file/d/${response.data.id}/view`,
+    actualFolderId,
   };
 }

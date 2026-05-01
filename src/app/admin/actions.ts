@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { updateModuleStatus, logModuleActivity } from "@/lib/db/modules";
+import { acceptModule, requestModuleRevision } from "@/lib/db/modules";
 import { requireRole } from "@/lib/auth/guards";
 
 export async function acceptModuleAction(formData: FormData) {
@@ -13,8 +13,7 @@ export async function acceptModuleAction(formData: FormData) {
     throw new Error("Invalid module id.");
   }
 
-  await updateModuleStatus({ moduleId, status: "accepted", acceptedByUserId: session.userId });
-  await logModuleActivity({ moduleId, actorUserId: session.userId, action: "module.accepted" });
+  await acceptModule({ moduleId, actorUserId: session.userId });
   revalidatePath("/admin");
   if (Number.isFinite(clinicId)) revalidatePath(`/admin/clinics/${clinicId}`);
   revalidatePath("/portal");
@@ -30,16 +29,10 @@ export async function requestRevisionAction(formData: FormData) {
     throw new Error("Invalid module id.");
   }
 
-  await updateModuleStatus({
-    moduleId,
-    status: "needs_revision",
-    managerComment: comment || "Нужны правки по файлу.",
-  });
-  await logModuleActivity({
+  await requestModuleRevision({
     moduleId,
     actorUserId: session.userId,
-    action: "module.revision_requested",
-    details: { comment },
+    comment: comment || "Нужны правки по файлу.",
   });
   revalidatePath("/admin");
   if (Number.isFinite(clinicId)) revalidatePath(`/admin/clinics/${clinicId}`);

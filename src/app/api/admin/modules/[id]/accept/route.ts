@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { updateModuleStatus, logModuleActivity } from "@/lib/db/modules";
+import { acceptModule } from "@/lib/db/modules";
 import { authErrorResponse, requireRole } from "@/lib/auth/guards";
 
 export async function POST(_request: Request, context: { params: Promise<{ id: string }> }) {
@@ -12,10 +12,9 @@ export async function POST(_request: Request, context: { params: Promise<{ id: s
       return NextResponse.json({ ok: false, error: "Invalid module id." }, { status: 400 });
     }
 
-    await updateModuleStatus({ moduleId, status: "accepted", acceptedByUserId: session.userId });
-    await logModuleActivity({ moduleId, actorUserId: session.userId, action: "module.accepted" });
+    const result = await acceptModule({ moduleId, actorUserId: session.userId });
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, actualCopy: result.actualCopy ?? null });
   } catch (error) {
     return authErrorResponse(error);
   }

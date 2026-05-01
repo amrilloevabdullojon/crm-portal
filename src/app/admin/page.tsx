@@ -4,6 +4,7 @@ import { clinicStatuses, moduleStatuses, type ModuleStatus } from "@/lib/domain"
 import { listAdminClinics, listIntegrationEvents, type IntegrationEventRow } from "@/lib/db/admin";
 import { acceptModuleAction, requestRevisionAction } from "@/app/admin/actions";
 import { getSession } from "@/lib/auth/session";
+import { getSlaSummary } from "@/lib/sla";
 import { LogoutButton } from "@/components/logout-button";
 import { Badge, ButtonLink, EmptyState, PageShell, Panel, ProgressBar, StatCard, TextLink } from "@/components/ui";
 
@@ -48,6 +49,7 @@ export default async function AdminPage() {
   );
   const failedEvents = events.filter((event) => event.status === "failed").length;
   const linkedUsers = clinics.flatMap((clinic) => clinic.users).filter((user) => user.telegramLinked).length;
+  const activeSla = clinics.filter((clinic) => getSlaSummary(clinic.slaStartedAt).active).length;
 
   return (
     <PageShell wide>
@@ -69,10 +71,11 @@ export default async function AdminPage() {
           </div>
         </header>
 
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-5">
           <StatCard hint="Всего в системе" label="Клиники" tone="info" value={clinics.length} />
           <StatCard hint="Ожидают решения" label="На проверке" tone={reviewItems.length ? "warning" : "neutral"} value={reviewItems.length} />
           <StatCard hint="Контакты с кодами входа" label="Telegram привязан" tone="success" value={linkedUsers} />
+          <StatCard hint="5 рабочих дней" label="SLA активны" tone={activeSla ? "info" : "neutral"} value={activeSla} />
           <StatCard hint="За последние события" label="Ошибки интеграций" tone={failedEvents ? "danger" : "neutral"} value={failedEvents} />
         </div>
 
@@ -94,6 +97,7 @@ export default async function AdminPage() {
                     const waiting = clinic.modules.filter((module) => module.status === "review").length;
                     const accepted = clinic.modules.filter((module) => module.status === "accepted").length;
                     const progress = clinic.modules.length > 0 ? Math.round((accepted / clinic.modules.length) * 100) : 0;
+                    const sla = getSlaSummary(clinic.slaStartedAt);
 
                     return (
                       <tr key={clinic.id} className="transition hover:bg-slate-50">
@@ -114,6 +118,11 @@ export default async function AdminPage() {
                             <span className="font-medium">{accepted}/{clinic.modules.length}</span>
                           </div>
                           {waiting ? <div className="mt-1 text-xs text-[var(--primary)]">{waiting} на проверке</div> : null}
+                          {sla.active ? (
+                            <div className={`mt-1 text-xs ${sla.overdue ? "text-[var(--danger)]" : "text-[var(--muted)]"}`}>
+                              SLA: {sla.overdue ? "просрочен" : `${sla.remainingBusinessDays} раб. дн.`}
+                            </div>
+                          ) : null}
                         </td>
                         <td className="hidden px-5 py-4 sm:table-cell">{clinic.users.length}</td>
                         <td className="hidden px-5 py-4 text-[var(--muted)] sm:table-cell">{formatDate(clinic.createdAt)}</td>
