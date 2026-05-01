@@ -13,10 +13,10 @@ export default function Home() {
   return (
     <PageShell>
       <div className="flex flex-col gap-6">
-        <nav className="flex flex-col gap-4 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-5 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <nav className="flex flex-col gap-4 rounded-xl glass-card px-6 py-5 sm:flex-row sm:items-center sm:justify-between animate-slide-up stagger-1">
           <div>
-            <div className="text-lg font-semibold">DMED Portal</div>
-            <div className="text-sm text-[var(--muted)]">Кабинет клиник и рабочее место менеджера</div>
+            <div className="text-xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600">DMED Portal</div>
+            <div className="text-sm font-medium text-[var(--muted)] mt-1">Кабинет клиник и рабочее место менеджера</div>
           </div>
           <div className="flex gap-3 text-sm font-medium">
             <ButtonLink href="/login">Войти</ButtonLink>
@@ -26,7 +26,7 @@ export default function Home() {
 
         <div className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr]">
           <Panel className="p-6 sm:p-8">
-            <h1 className="max-w-3xl text-3xl font-semibold leading-tight tracking-tight sm:text-5xl">
+            <h1 className="max-w-3xl text-4xl font-extrabold leading-tight tracking-tight sm:text-6xl bg-clip-text text-transparent bg-gradient-to-r from-slate-900 via-slate-800 to-slate-600 pb-2">
               Единый портал для запуска клиник DMED.
             </h1>
             <p className="mt-5 max-w-2xl text-base leading-7 text-[var(--muted)] sm:text-lg">
@@ -43,8 +43,8 @@ export default function Home() {
           <Panel className="p-6">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <div className="text-sm font-semibold text-[var(--muted)]">Готовность MVP</div>
-                <div className="mt-1 text-3xl font-semibold">100%</div>
+                <div className="text-sm font-bold uppercase tracking-wider text-[var(--muted)]">Готовность MVP</div>
+                <div className="mt-2 text-4xl font-black text-slate-800">100%</div>
               </div>
               <Link className="text-sm font-semibold text-[var(--primary)]" href="/admin/events">
                 Мониторинг
@@ -55,9 +55,9 @@ export default function Home() {
             </div>
             <div className="mt-5 space-y-4">
               {features.map((item) => (
-                <div key={item.label} className="flex items-center justify-between gap-4 border-b border-[var(--border)] pb-3 last:border-0">
-                  <span className="text-sm font-medium">{item.label}</span>
-                  <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-[var(--success)]">
+                <div key={item.label} className="flex items-center justify-between gap-4 border-b border-[var(--border)] pb-3 last:border-0 hover:bg-slate-50/50 p-2 rounded-lg transition-colors">
+                  <span className="text-sm font-medium text-slate-700">{item.label}</span>
+                  <span className="rounded-full bg-[var(--success-bg)] px-3 py-1 text-xs font-bold text-[var(--success)] shadow-sm border border-emerald-100/50">
                     {item.status}
                   </span>
                 </div>
