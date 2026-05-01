@@ -27,7 +27,8 @@ export default function LoginPage() {
             {[
               ["1", "Отправьте свой номер в Telegram-боте через кнопку контакта."],
               ["2", "Запросите код на этой странице. Код придет в тот же Telegram."],
-              ["3", "После входа система откроет кабинет клиники или админ-панель по роли."],
+              ["3", "Код действует 10 минут. После нескольких неверных попыток вход временно блокируется."],
+              ["4", "После входа система откроет кабинет клиники или админ-панель по роли."],
             ].map(([step, text]) => (
               <div key={step} className="flex gap-3">
                 <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--surface-muted)] text-sm font-semibold">

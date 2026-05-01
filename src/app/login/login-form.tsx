@@ -6,6 +6,38 @@ import { useRouter, useSearchParams } from "next/navigation";
 type Step = "phone" | "code";
 type MessageTone = "info" | "error" | "success";
 
+function getStartErrorMessage(result: { code?: string; error?: string }) {
+  if (result.code === "telegram_not_linked") {
+    return "Telegram не привязан к этому номеру. Откройте бота, нажмите кнопку отправки контакта и вернитесь сюда за кодом.";
+  }
+
+  if (result.code === "rate_limited") {
+    return "Слишком много запросов кода. Попробуйте снова через 10 минут.";
+  }
+
+  if (result.code === "telegram_delivery_failed") {
+    return "Не удалось отправить код в Telegram. Проверьте, что бот открыт и номер отправлен через кнопку контакта.";
+  }
+
+  if (result.code === "telegram_not_configured") {
+    return "Доставка кодов в Telegram пока не настроена. Обратитесь к менеджеру DMED.";
+  }
+
+  return result.error ?? "Не удалось отправить код.";
+}
+
+function getVerifyErrorMessage(result: { code?: string; error?: string }) {
+  if (result.code === "verify_rate_limited") {
+    return "Слишком много неверных попыток. Запросите новый код через 10 минут.";
+  }
+
+  if (result.code === "invalid_code") {
+    return "Код неверный или уже истек. Проверьте сообщение в Telegram или запросите новый код.";
+  }
+
+  return result.error ?? "Неверный код.";
+}
+
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -36,13 +68,7 @@ export function LoginForm() {
       if (!response.ok) {
         setTelegramBotUsername(result.telegramBotUsername ?? "");
         setMessageTone("error");
-        setMessage(
-          result.code === "telegram_not_linked"
-            ? "Telegram не привязан к этому номеру. Откройте бота и отправьте номер через кнопку контакта."
-            : result.code === "rate_limited"
-              ? "Слишком много запросов кода. Попробуйте снова через 10 минут."
-            : result.error ?? "Не удалось отправить код.",
-        );
+        setMessage(getStartErrorMessage(result));
         return;
       }
 
@@ -80,7 +106,7 @@ export function LoginForm() {
 
       if (!response.ok) {
         setMessageTone("error");
-        setMessage(result.error ?? "Неверный код.");
+        setMessage(getVerifyErrorMessage(result));
         return;
       }
 
@@ -120,6 +146,9 @@ export function LoginForm() {
           type="tel"
           value={phone}
         />
+        <span className="mt-2 block text-xs leading-5 text-[var(--muted)]">
+          В Telegram номер принимается только через кнопку отправки контакта.
+        </span>
       </label>
 
       {step === "code" ? (

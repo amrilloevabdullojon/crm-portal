@@ -15,6 +15,20 @@ const moduleTone: Record<ModuleStatus, "neutral" | "info" | "success" | "warning
   accepted: "success",
 };
 
+type ModuleFilter = "all" | "actions" | "review" | "accepted";
+
+const moduleFilters: Array<{ label: string; value: ModuleFilter }> = [
+  { label: "Все", value: "all" },
+  { label: "Нужны действия", value: "actions" },
+  { label: "На проверке", value: "review" },
+  { label: "Принято", value: "accepted" },
+];
+
+function parseModuleFilter(value: string | string[] | undefined): ModuleFilter {
+  const filter = typeof value === "string" ? value : "all";
+  return moduleFilters.some((item) => item.value === filter) ? (filter as ModuleFilter) : "all";
+}
+
 function formatDate(value?: string | null) {
   if (!value) return "—";
 
@@ -48,6 +62,17 @@ function getActionTitle(module: PortalModule) {
   if (module.status === "collection" && !getCurrentFile(module)) return "Ожидаем файл";
   if (module.status === "review") return "На проверке";
   return "Готово";
+}
+
+function needsClientAction(module: PortalModule) {
+  return module.status === "needs_revision" || (module.status === "collection" && !getCurrentFile(module));
+}
+
+function matchesModuleFilter(module: PortalModule, filter: ModuleFilter) {
+  if (filter === "actions") return needsClientAction(module);
+  if (filter === "review") return module.status === "review";
+  if (filter === "accepted") return module.status === "accepted";
+  return true;
 }
 
 function detailText(details: Record<string, unknown>, key: string) {
@@ -90,7 +115,11 @@ function getActivityView(activity: ActivityLogRow): {
   };
 }
 
-export default async function PortalPage() {
+export default async function PortalPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const session = await getSession();
 
   if (!session) {
@@ -98,20 +127,23 @@ export default async function PortalPage() {
   }
 
   const clinicId = session.clinicId ?? 1;
-  const [clinic, activityLog] = await Promise.all([
+  const [clinic, activityLog, params] = await Promise.all([
     getPortalClinic(clinicId),
     listPortalActivityLog({ clinicId, limit: 12 }),
+    searchParams,
   ]);
+  const moduleFilter = parseModuleFilter(params.filter);
   const acceptedCount = clinic.modules.filter((module) => module.status === "accepted").length;
   const reviewCount = clinic.modules.filter((module) => module.status === "review").length;
   const revisionCount = clinic.modules.filter((module) => module.status === "needs_revision").length;
-  const uploadNeededCount = clinic.modules.filter((module) => module.status === "collection" && !getCurrentFile(module)).length;
+  const uploadNeededCount = clinic.modules.filter((module) => needsClientAction(module)).length;
   const uploadedCount = clinic.modules.filter((module) => getCurrentFile(module)).length;
   const progress = clinic.modules.length > 0 ? Math.round((acceptedCount / clinic.modules.length) * 100) : 0;
   const sla = getSlaSummary(clinic.slaStartedAt);
   const actionModules = clinic.modules
-    .filter((module) => module.status === "needs_revision" || (module.status === "collection" && !getCurrentFile(module)))
+    .filter((module) => needsClientAction(module))
     .slice(0, 4);
+  const visibleModules = clinic.modules.filter((module) => matchesModuleFilter(module, moduleFilter));
 
   return (
     <PageShell>
@@ -126,6 +158,16 @@ export default async function PortalPage() {
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
+              {clinic.driveFolderUrl ? (
+                <a
+                  className="inline-flex h-10 items-center justify-center rounded-md border border-[var(--border)] bg-white px-4 text-sm font-semibold transition hover:border-slate-300 hover:bg-slate-50"
+                  href={clinic.driveFolderUrl}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  Папка файлов
+                </a>
+              ) : null}
               {session.role === "admin" || session.role === "manager" ? <ButtonLink href="/admin">Админка</ButtonLink> : null}
               <LogoutButton />
             </div>
@@ -171,6 +213,9 @@ export default async function PortalPage() {
                 </div>
                 <div className="mt-3 text-base font-semibold">{module.name}</div>
                 <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{getModuleHint(module)}</p>
+                <a className="mt-3 inline-flex text-sm font-semibold text-[var(--primary)] hover:text-[var(--primary-dark)]" href={`#module-${module.id}`}>
+                  Открыть модуль
+                </a>
               </div>
             ))}
             {actionModules.length === 0 ? (
@@ -184,6 +229,26 @@ export default async function PortalPage() {
         </Panel>
 
         <Panel title="Модули внедрения">
+          <div className="flex flex-col gap-3 border-b border-[var(--border)] px-5 py-4 md:flex-row md:items-center md:justify-between">
+            <div className="text-sm text-[var(--muted)]">
+              Показано {visibleModules.length} из {clinic.modules.length}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {moduleFilters.map((filter) => (
+                <a
+                  key={filter.value}
+                  className={`inline-flex h-9 items-center justify-center rounded-md px-3 text-sm font-semibold transition ${
+                    moduleFilter === filter.value
+                      ? "bg-[var(--primary)] text-white shadow-sm"
+                      : "border border-[var(--border)] bg-white hover:border-slate-300 hover:bg-slate-50"
+                  }`}
+                  href={filter.value === "all" ? "/portal#modules" : `/portal?filter=${filter.value}#modules`}
+                >
+                  {filter.label}
+                </a>
+              ))}
+            </div>
+          </div>
           <div className="grid gap-3 border-b border-[var(--border)] bg-slate-50 p-5 md:grid-cols-4">
             {clinic.modules.map((module, index) => (
               <div key={module.id} className="rounded-md border border-[var(--border)] bg-white px-3 py-3">
@@ -195,13 +260,13 @@ export default async function PortalPage() {
               </div>
             ))}
           </div>
-          <div className="divide-y divide-[var(--border)]">
-            {clinic.modules.map((module) => {
+          <div id="modules" className="scroll-mt-4 divide-y divide-[var(--border)]">
+            {visibleModules.map((module) => {
               const currentFile = getCurrentFile(module);
               const files = module.files ?? [];
 
               return (
-                <article key={module.id} className="p-5">
+                <article key={module.id} id={`module-${module.id}`} className="scroll-mt-4 p-5">
                   <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-start">
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
@@ -269,6 +334,7 @@ export default async function PortalPage() {
               );
             })}
             {clinic.modules.length === 0 ? <div className="p-8 text-center text-sm text-[var(--muted)]">Модули пока не настроены.</div> : null}
+            {clinic.modules.length > 0 && visibleModules.length === 0 ? <EmptyState>По этому фильтру модулей нет.</EmptyState> : null}
           </div>
         </Panel>
 

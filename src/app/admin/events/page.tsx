@@ -102,7 +102,7 @@ export default async function AdminEventsPage({
                     </td>
                     <td className="hidden px-5 py-4 text-[var(--muted)] sm:table-cell">{formatDate(event.createdAt)}</td>
                     <td className="px-5 py-4">
-                      {(event.provider === "amo" || event.provider === "slack") && event.status !== "processed" ? (
+                      {["amo", "slack", "google_drive"].includes(event.provider) && event.status !== "processed" ? (
                         <form action={retryIntegrationEventAction}>
                           <input name="eventId" type="hidden" value={event.id} />
                           <button className="h-9 rounded-md border border-[var(--border)] bg-white px-3 text-xs font-semibold transition hover:bg-slate-50" type="submit">

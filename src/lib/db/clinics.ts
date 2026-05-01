@@ -61,6 +61,7 @@ function mapClinic(row: ClinicRow): PortalClinic {
     id: row.id,
     name: row.name,
     status: row.status,
+    driveFolderUrl: row.drive_folder_url ?? undefined,
     slaStartedAt: row.sla_started_at ?? undefined,
     modules: row.clinic_modules.map(mapModule).sort((left, right) => left.id - right.id),
   };

@@ -10,6 +10,7 @@ import { getIntegrationEventForRetry, updateIntegrationEvent } from "@/lib/db/in
 import { acceptModule, logModuleActivity, requestModuleRevision } from "@/lib/db/modules";
 import { getUserDisplayName } from "@/lib/db/users";
 import { requireRole } from "@/lib/auth/guards";
+import { copyModuleFileToActualFolder } from "@/lib/google-drive/client";
 import { deliverSlackMessage } from "@/lib/slack/client";
 import { sendAccessRequestToSlack, sendSetupRequestToSlack } from "@/lib/slack/requests";
 
@@ -230,6 +231,40 @@ export async function retryIntegrationEventAction(formData: FormData) {
 
       revalidatePath("/admin/events");
       successNotice = "Slack событие повторно отправлено.";
+    } else if (event.provider === "google_drive") {
+      const clinicName = typeof event.payload.clinicName === "string" ? event.payload.clinicName : "";
+      const moduleName = typeof event.payload.moduleName === "string" ? event.payload.moduleName : "";
+      const sourceFileId = typeof event.payload.sourceFileId === "string" ? event.payload.sourceFileId : "";
+      const fileName = typeof event.payload.fileName === "string" ? event.payload.fileName : "";
+      const clinicId = Number(event.payload.clinicId);
+      const moduleId = Number(event.payload.moduleId);
+
+      if (!clinicName || !moduleName || !sourceFileId || !fileName) {
+        throw new Error("Google Drive event does not contain enough copy details.");
+      }
+
+      const actualCopy = await copyModuleFileToActualFolder({
+        clinicName,
+        moduleName,
+        sourceFileId,
+        fileName,
+      });
+
+      await updateIntegrationEvent({ id: event.id, status: "processed" });
+      await logModuleActivity({
+        actorUserId: session.userId,
+        clinicId: Number.isFinite(clinicId) ? clinicId : null,
+        moduleId: Number.isFinite(moduleId) ? moduleId : null,
+        action: "integration_event.retried",
+        details: { eventId, provider: event.provider, actualCopy },
+      });
+
+      revalidatePath("/admin/events");
+      if (Number.isFinite(clinicId)) {
+        revalidatePath(`/admin/clinics/${clinicId}`);
+        successRedirectPath = `/admin/clinics/${clinicId}`;
+      }
+      successNotice = "Копирование Google Drive повторно выполнено.";
     } else if (event.provider === "amo") {
       const webhookInfo = extractAmoWebhookInfo(event.payload);
       const dealId = Number(webhookInfo.dealId);
@@ -257,7 +292,7 @@ export async function retryIntegrationEventAction(formData: FormData) {
       successRedirectPath = `/admin/clinics/${result.clinic.id}`;
       successNotice = "Событие amoCRM повторно обработано.";
     } else {
-      throw new Error("Повтор пока поддерживается для amoCRM и Slack.");
+      throw new Error("Повтор пока поддерживается для amoCRM, Slack и Google Drive.");
     }
   } catch (error) {
     await updateIntegrationEvent({ id: event.id, status: "failed", errorMessage: errorMessage(error) });

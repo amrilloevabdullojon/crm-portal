@@ -6,7 +6,8 @@ export async function POST(request: Request) {
   const result = await startAuthChallenge(String(body.phone ?? ""));
 
   if (!result.ok) {
-    return NextResponse.json(result, { status: 400 });
+    const status = "code" in result && result.code === "rate_limited" ? 429 : 400;
+    return NextResponse.json(result, { status });
   }
 
   return NextResponse.json(result);

@@ -101,6 +101,7 @@ The webhook should listen to lead status changes.
 Docs:
 
 - `docs/stages/03-amocrm-webhook.md`
+- `docs/implementation-phases.md`
 
 ## Telegram Login
 
@@ -112,12 +113,14 @@ Users must link Telegram before production login can deliver one-time codes:
 
 The app stores the Telegram chat id in `users.telegram_chat_id`.
 If a user tries to log in before linking Telegram, the login form shows a link to the bot from `TELEGRAM_BOT_USERNAME`.
+Code requests and invalid verification attempts are rate-limited and written to `activity_log`.
 
 ## Client Portal
 
 `/portal` shows the clinic progress, urgent client actions, SLA status, current files, and recent uploaded versions per module.
 Accepted modules are locked from repeat uploads; modules with revisions show the manager comment and move back to review after a new upload.
 The client timeline shows only safe module events: uploads, accepted files, and revision requests.
+If a Drive folder exists, the portal exposes it as the clinic file folder.
 
 ## Admin
 
@@ -138,6 +141,7 @@ The clinic page also contains the admin handoff actions:
 Managers can also manually sync an amoCRM deal from `/admin`, and retry failed or ignored amoCRM events from `/admin/events`.
 amoCRM target statuses are stored in DB settings after the first save in `/admin/settings`; Vercel env remains the fallback.
 Auth attempts are written to `activity_log`, Slack delivery is tracked in `integration_events`, and client uploads are limited to common document/image formats up to 50 MB.
+Google Drive copies into `02_Actual` are tracked in `integration_events` and can be retried from `/admin/events`.
 
 ## Useful Commands
 

@@ -10,7 +10,8 @@ export async function POST(request: Request) {
   });
 
   if (!result.ok) {
-    return NextResponse.json(result, { status: 400 });
+    const status = "code" in result && result.code === "verify_rate_limited" ? 429 : 400;
+    return NextResponse.json(result, { status });
   }
 
   await setSessionCookie(result.session);

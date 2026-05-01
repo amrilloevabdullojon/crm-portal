@@ -18,6 +18,7 @@ type AuthChallengeRecord = {
   phone: string;
   codeHash: string;
   expiresAt: number;
+  failedAttempts?: number;
 };
 
 const demoChallenges = new Map<string, AuthChallengeRecord>();
@@ -101,6 +102,26 @@ async function isPhoneRateLimited(phone: string) {
 
   if (error) {
     console.warn("Auth rate limit query failed:", error.message);
+    return false;
+  }
+
+  return (count ?? 0) >= 5;
+}
+
+async function isVerifyRateLimited(challengeId: string) {
+  if (!hasSupabaseAdminConfig() || !challengeId) return false;
+
+  const supabase = getSupabaseAdminClient();
+  const since = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  const { count, error } = await supabase
+    .from("activity_log")
+    .select("id", { count: "exact", head: true })
+    .eq("action", "auth.verify_failed")
+    .eq("details->>challengeId", challengeId)
+    .gte("created_at", since);
+
+  if (error) {
+    console.warn("Auth verify rate limit query failed:", error.message);
     return false;
   }
 
@@ -245,8 +266,27 @@ export async function verifyAuthChallenge(input: { challengeId: string; code: st
   if (!hasSupabaseAdminConfig()) {
     const challenge = demoChallenges.get(input.challengeId);
 
+    if (challenge && (challenge.failedAttempts ?? 0) >= 5) {
+      return {
+        ok: false as const,
+        code: "verify_rate_limited",
+        error: "Too many invalid code attempts. Request a new code in 10 minutes.",
+      };
+    }
+
     if (!challenge || challenge.expiresAt <= Date.now() || !hashesMatch(challenge.codeHash, codeHash)) {
-      return { ok: false as const, error: "Invalid or expired code." };
+      if (challenge) {
+        challenge.failedAttempts = (challenge.failedAttempts ?? 0) + 1;
+        if (challenge.failedAttempts >= 5) {
+          return {
+            ok: false as const,
+            code: "verify_rate_limited",
+            error: "Too many invalid code attempts. Request a new code in 10 minutes.",
+          };
+        }
+      }
+
+      return { ok: false as const, code: "invalid_code", error: "Invalid or expired code." };
     }
 
     demoChallenges.delete(input.challengeId);
@@ -263,6 +303,18 @@ export async function verifyAuthChallenge(input: { challengeId: string; code: st
         role: user.role,
         clinicId: user.clinic_users?.[0]?.clinic_id,
       },
+    };
+  }
+
+  if (await isVerifyRateLimited(input.challengeId)) {
+    await createActivityLog({
+      action: "auth.verify_rate_limited",
+      details: { challengeId: input.challengeId },
+    });
+    return {
+      ok: false as const,
+      code: "verify_rate_limited",
+      error: "Too many invalid code attempts. Request a new code in 10 minutes.",
     };
   }
 
@@ -295,7 +347,7 @@ export async function verifyAuthChallenge(input: { challengeId: string; code: st
       action: "auth.verify_failed",
       details: { challengeId: input.challengeId },
     });
-    return { ok: false as const, error: "Invalid or expired code." };
+    return { ok: false as const, code: "invalid_code", error: "Invalid or expired code." };
   }
 
   await supabase.from("auth_challenges").update({ consumed_at: new Date().toISOString() }).eq("id", data.id);

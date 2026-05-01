@@ -1,5 +1,6 @@
 import type { ModuleStatus } from "@/lib/domain";
 import { createAmoLeadNote } from "@/lib/amocrm/notes";
+import { createIntegrationEvent, updateIntegrationEvent } from "@/lib/db/integration-events";
 import { getSupabaseAdminClient, hasSupabaseAdminConfig } from "@/lib/db/supabase";
 import { copyModuleFileToActualFolder, hasGoogleDriveConfig } from "@/lib/google-drive/client";
 import { sendTelegramMessage } from "@/lib/telegram/client";
@@ -181,14 +182,35 @@ export async function acceptModule(input: { moduleId: number; actorUserId?: numb
   }
 
   let actualCopy: Awaited<ReturnType<typeof copyModuleFileToActualFolder>> | null = null;
+  let actualCopyError: string | null = null;
 
   if (context && clinic && currentFile?.storage_file_id && hasGoogleDriveConfig()) {
-    actualCopy = await copyModuleFileToActualFolder({
-      clinicName: clinic.name,
-      moduleName: context.name,
-      sourceFileId: currentFile.storage_file_id,
-      fileName: currentFile.file_name,
+    const event = await createIntegrationEvent({
+      provider: "google_drive",
+      eventType: "actual_copy",
+      payload: {
+        clinicId: context.clinic_id,
+        moduleId: context.id,
+        clinicName: clinic.name,
+        moduleName: context.name,
+        sourceFileId: currentFile.storage_file_id,
+        fileName: currentFile.file_name,
+      },
     });
+
+    try {
+      actualCopy = await copyModuleFileToActualFolder({
+        clinicName: clinic.name,
+        moduleName: context.name,
+        sourceFileId: currentFile.storage_file_id,
+        fileName: currentFile.file_name,
+      });
+      await updateIntegrationEvent({ id: event.id, status: "processed" });
+    } catch (error) {
+      actualCopyError = error instanceof Error ? error.message : "Unknown Google Drive copy error.";
+      await updateIntegrationEvent({ id: event.id, status: "failed", errorMessage: actualCopyError });
+      console.warn("Google Drive actual copy failed:", error);
+    }
   }
 
   await logModuleActivity({
@@ -198,6 +220,7 @@ export async function acceptModule(input: { moduleId: number; actorUserId?: numb
     action: "module.accepted",
     details: {
       actualCopy,
+      actualCopyError,
       fileName: currentFile?.file_name,
       fileUrl: currentFile?.file_url,
     },

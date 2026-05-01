@@ -39,6 +39,7 @@ export type PortalClinic = {
   id: number;
   name: string;
   status: ClinicStatus;
+  driveFolderUrl?: string;
   slaStartedAt?: string;
   modules: PortalModule[];
 };
