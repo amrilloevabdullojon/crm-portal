@@ -75,7 +75,7 @@ export default async function AdminSettingsPage() {
               />
             </label>
             <p className="text-sm leading-6 text-[var(--muted)]">
-              Можно вводить через запятую, пробел или новую строку. Webhook amoCRM будет создавать/обновлять кабинеты только для этих этапов.
+              Можно вводить через запятую, пробел или новую строку. Webhook amoCRM будет создавать/обновлять кабинеты только при смене этапа сделки на один из этих статусов. Событие создания сделки игнорируется.
             </p>
             <button className="h-10 rounded-md bg-[var(--primary)] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)]" type="submit">
               Сохранить

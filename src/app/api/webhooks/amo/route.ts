@@ -62,8 +62,8 @@ export async function POST(request: Request) {
   const webhookInfo = extractAmoWebhookInfo(payload);
   const event = await createIntegrationEvent({
     provider: "amo",
-    externalId: webhookInfo.dealId ? `deal:${webhookInfo.dealId}:${Date.now()}` : null,
-    eventType: "lead_status",
+    externalId: webhookInfo.dealId ? `deal:${webhookInfo.dealId}:${webhookInfo.action}:${Date.now()}` : null,
+    eventType: `lead_${webhookInfo.action}`,
     payload,
   });
 
@@ -73,13 +73,28 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, ignored: true, reason: "missing_deal_id" });
     }
 
-    const { targetStatusIds } = await getAmoStatusSettings();
-    const isTargetStatus = targetStatusIds.some((statusId) => String(webhookInfo.statusId) === String(statusId));
-    if (targetStatusIds.length > 0 && webhookInfo.statusId && !isTargetStatus) {
+    if (webhookInfo.action !== "status") {
       await updateIntegrationEvent({
         id: event.id,
         status: "ignored",
-        errorMessage: `Status ${webhookInfo.statusId} does not match targets ${targetStatusIds.join(", ")}.`,
+        errorMessage: `Ignored amoCRM ${webhookInfo.action} event. Portal starts only after lead status change.`,
+      });
+      return NextResponse.json({
+        ok: true,
+        ignored: true,
+        reason: "not_status_change",
+        action: webhookInfo.action,
+        dealId: webhookInfo.dealId,
+      });
+    }
+
+    const { targetStatusIds } = await getAmoStatusSettings();
+    const isTargetStatus = targetStatusIds.some((statusId) => String(webhookInfo.statusId) === String(statusId));
+    if (targetStatusIds.length > 0 && !isTargetStatus) {
+      await updateIntegrationEvent({
+        id: event.id,
+        status: "ignored",
+        errorMessage: `Status ${webhookInfo.statusId ?? "missing"} does not match targets ${targetStatusIds.join(", ")}.`,
       });
       return NextResponse.json({
         ok: true,

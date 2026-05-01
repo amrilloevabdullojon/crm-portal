@@ -286,6 +286,10 @@ export async function retryIntegrationEventAction(formData: FormData) {
       const webhookInfo = extractAmoWebhookInfo(event.payload);
       const dealId = Number(webhookInfo.dealId);
 
+      if (webhookInfo.action !== "status") {
+        throw new Error("Автозапуск портала разрешен только для события смены этапа сделки amoCRM.");
+      }
+
       if (!Number.isFinite(dealId)) {
         throw new Error("amoCRM event does not contain a valid deal id.");
       }

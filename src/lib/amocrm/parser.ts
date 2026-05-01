@@ -1,4 +1,5 @@
 import { normalizePhone } from "@/lib/auth/phone";
+import { extractAmoWebhookInfoFromPayload } from "@/lib/amocrm/webhook-info.mjs";
 
 export type AmoContact = {
   id?: string | number;
@@ -7,7 +8,10 @@ export type AmoContact = {
   role: string;
 };
 
+export type AmoWebhookAction = "status" | "add" | "update" | "unknown";
+
 export type AmoWebhookInfo = {
+  action: AmoWebhookAction;
   dealId: string | null;
   statusId: string | null;
   dealName: string | null;
@@ -31,29 +35,7 @@ export function getAmoTargetStatusIds() {
 }
 
 export function extractAmoWebhookInfo(payload: Record<string, unknown>): AmoWebhookInfo {
-  const get = (key: string) => {
-    const value = payload[key];
-    return typeof value === "string" || typeof value === "number" ? String(value) : null;
-  };
-
-  const prefixes = ["leads[status][0]", "leads[add][0]", "leads[update][0]"];
-
-  for (const prefix of prefixes) {
-    const dealId = get(`${prefix}[id]`);
-    if (dealId) {
-      return {
-        dealId,
-        statusId: get(`${prefix}[status_id]`),
-        dealName: get(`${prefix}[name]`),
-      };
-    }
-  }
-
-  return {
-    dealId: null,
-    statusId: null,
-    dealName: null,
-  };
+  return extractAmoWebhookInfoFromPayload(payload) as AmoWebhookInfo;
 }
 
 function parseModulesFromText(value: unknown) {
