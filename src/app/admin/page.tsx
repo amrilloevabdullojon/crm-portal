@@ -30,6 +30,17 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
+function pluralRu(value: number, one: string, few: string, many: string) {
+  const absValue = Math.abs(value);
+  const lastTwo = absValue % 100;
+  const last = absValue % 10;
+
+  if (lastTwo >= 11 && lastTwo <= 14) return many;
+  if (last === 1) return one;
+  if (last >= 2 && last <= 4) return few;
+  return many;
+}
+
 function isGeneralInfoName(name: string) {
   const normalized = name.toLowerCase();
   return normalized.includes("общ") || normalized.includes("general");
@@ -86,27 +97,52 @@ export default async function AdminPage({
   const failedEvents = events.filter((event) => event.status === "failed").length;
   const linkedUsers = clinics.flatMap((clinic) => clinic.users).filter((user) => user.telegramLinked).length;
   const activeSla = clinics.filter((clinic) => getSlaSummary(clinic.slaStartedAt).active).length;
+  const overdueSla = clinics.filter((clinic) => getSlaSummary(clinic.slaStartedAt).overdue).length;
+  const focusTitle = failedEvents
+    ? `${failedEvents} ${pluralRu(failedEvents, "ошибка интеграций", "ошибки интеграций", "ошибок интеграций")}`
+    : reviewItems.length
+      ? `${reviewItems.length} ${pluralRu(reviewItems.length, "файл ждет", "файла ждут", "файлов ждут")} решения`
+      : overdueSla
+        ? `${overdueSla} ${pluralRu(overdueSla, "SLA просрочен", "SLA просрочены", "SLA просрочены")}`
+        : "Критичных задач нет";
+  const focusDescription = failedEvents
+    ? "Проверьте последние события, чтобы понять, где остановилась синхронизация."
+    : reviewItems.length
+      ? "Начните с очереди проверки ниже: принять файл или вернуть клиенту комментарий."
+      : overdueSla
+        ? "Откройте SLA-отчет и проверьте клиники с нарушенным сроком."
+        : "Фильтры и очередь ниже помогут быстро найти нужную клинику.";
+  const focusTone: "neutral" | "warning" | "danger" = failedEvents ? "danger" : reviewItems.length || overdueSla ? "warning" : "neutral";
 
   return (
     <PageShell wide>
       <div className="flex flex-col gap-6">
-        <header className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div>
+        <header className="overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface)] shadow-sm">
+          <div className="grid gap-6 p-5 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
+            <div className="min-w-0">
               <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--muted)]">Рабочее место</div>
               <h1 className="mt-1 text-3xl font-semibold tracking-tight">Админ-панель</h1>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted)]">
                 Контроль клиник, очереди проверки, Telegram-привязок и событий интеграций.
               </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Badge tone={focusTone}>{focusTitle}</Badge>
+                <Badge tone={overdueSla ? "danger" : activeSla ? "info" : "neutral"}>SLA: {activeSla} активных</Badge>
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {session.role === "admin" ? <ButtonLink href="/admin/settings">Настройки</ButtonLink> : null}
-              {session.role === "admin" ? <ButtonLink href="/admin/users">Пользователи</ButtonLink> : null}
-              <ButtonLink href="/admin/sla">SLA</ButtonLink>
-              <ButtonLink href="/portal">Портал</ButtonLink>
-              <ButtonLink href="/admin/events">События</ButtonLink>
-              <LogoutButton />
-            </div>
+            <aside className={`border-l-4 px-4 py-1 ${focusTone === "danger" ? "border-l-[var(--danger)]" : focusTone === "warning" ? "border-l-[var(--warning)]" : "border-l-slate-300"}`}>
+              <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--muted)]">Фокус сейчас</div>
+              <div className="mt-2 text-lg font-semibold">{focusTitle}</div>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{focusDescription}</p>
+            </aside>
+          </div>
+          <div className="flex flex-wrap gap-2 border-t border-[var(--border)] bg-slate-50/70 px-5 py-4">
+            {session.role === "admin" ? <ButtonLink href="/admin/settings">Настройки</ButtonLink> : null}
+            {session.role === "admin" ? <ButtonLink href="/admin/users">Пользователи</ButtonLink> : null}
+            <ButtonLink href="/admin/sla">SLA</ButtonLink>
+            <ButtonLink href="/portal">Портал</ButtonLink>
+            <ButtonLink href="/admin/events">События</ButtonLink>
+            <LogoutButton />
           </div>
         </header>
 
@@ -182,11 +218,12 @@ export default async function AdminPage({
                     const accepted = clinic.modules.filter((module) => module.status === "accepted").length;
                     const progress = clinic.modules.length > 0 ? Math.round((accepted / clinic.modules.length) * 100) : 0;
                     const sla = getSlaSummary(clinic.slaStartedAt);
+                    const linkedClinicUsers = clinic.users.filter((user) => user.telegramLinked).length;
 
                     return (
-                      <tr key={clinic.id} className="transition hover:bg-slate-50">
+                      <tr key={clinic.id} className="transition hover:bg-slate-50/80">
                         <td className="px-5 py-4">
-                          <Link className="font-semibold text-[var(--primary)]" href={`/admin/clinics/${clinic.id}`}>
+                          <Link className="text-base font-semibold text-[var(--primary)] hover:text-[var(--primary-dark)]" href={`/admin/clinics/${clinic.id}`}>
                             {clinic.name}
                           </Link>
                           <div className="mt-1 font-mono text-xs text-[var(--muted)]">
@@ -208,7 +245,10 @@ export default async function AdminPage({
                             </div>
                           ) : null}
                         </td>
-                        <td className="hidden px-5 py-4 sm:table-cell">{clinic.users.length}</td>
+                        <td className="hidden px-5 py-4 sm:table-cell">
+                          <div className="font-semibold">{clinic.users.length}</div>
+                          <div className="mt-1 text-xs text-[var(--muted)]">{linkedClinicUsers} Telegram</div>
+                        </td>
                         <td className="hidden px-5 py-4 text-[var(--muted)] sm:table-cell">{formatDate(clinic.createdAt)}</td>
                       </tr>
                     );
@@ -216,7 +256,7 @@ export default async function AdminPage({
                   {clinics.length === 0 ? (
                     <tr>
                       <td className="px-5 py-8 text-center text-[var(--muted)]" colSpan={5}>
-                        Клиник пока нет.
+                        {allClinics.length ? "По текущим фильтрам клиник нет." : "Клиник пока нет."}
                       </td>
                     </tr>
                   ) : null}

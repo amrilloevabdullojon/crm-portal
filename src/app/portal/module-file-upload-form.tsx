@@ -70,8 +70,8 @@ export function ModuleFileUploadForm({ moduleId, moduleName }: ModuleFileUploadF
   }
 
   return (
-    <div className="w-full max-w-xl">
-      <div className="flex flex-col gap-3 sm:flex-row">
+    <div className="w-full">
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
         <input
           ref={inputRef}
           aria-label={`Файл для модуля ${moduleName}`}
@@ -100,14 +100,16 @@ export function ModuleFileUploadForm({ moduleId, moduleName }: ModuleFileUploadF
           type="file"
         />
         <label
-          className="flex h-10 min-w-0 flex-1 cursor-pointer items-center rounded-md border border-[var(--border)] bg-white px-3 text-sm transition hover:border-slate-300 hover:bg-slate-50"
+          className="flex min-h-12 min-w-0 cursor-pointer items-center rounded-md border border-[var(--border)] bg-white px-3 text-sm transition hover:border-slate-300 hover:bg-slate-50"
           htmlFor={`module-file-${moduleId}`}
         >
           <span className="shrink-0 font-semibold text-[var(--foreground)]">Выбрать файл</span>
-          <span className="ml-3 truncate text-[var(--muted)]">{fileName || "Файл не выбран"}</span>
+          <span className="mx-3 h-5 w-px shrink-0 bg-[var(--border)]" />
+          <span className="min-w-0 truncate text-[var(--muted)]">{fileName || "Файл не выбран"}</span>
+          {fileMeta ? <span className="ml-3 shrink-0 rounded-full bg-[var(--surface-muted)] px-2 py-1 text-xs font-semibold text-[var(--muted)]">{fileMeta}</span> : null}
         </label>
         <button
-          className="h-10 rounded-md bg-[var(--primary)] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)] disabled:cursor-not-allowed disabled:opacity-60"
+          className="h-12 rounded-md bg-[var(--primary)] px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)] disabled:cursor-not-allowed disabled:opacity-60"
           disabled={state === "uploading" || !fileName}
           onClick={uploadFile}
           type="button"
@@ -116,12 +118,12 @@ export function ModuleFileUploadForm({ moduleId, moduleName }: ModuleFileUploadF
         </button>
       </div>
       {message ? (
-        <p className={`mt-2 text-sm ${state === "error" ? "text-[var(--danger)]" : "text-[var(--success)]"}`}>
+        <p className={`mt-3 rounded-md border px-3 py-2 text-sm ${state === "error" ? "border-red-100 bg-red-50 text-[var(--danger)]" : "border-emerald-100 bg-emerald-50 text-[var(--success)]"}`}>
           {message}
         </p>
       ) : null}
       <p className="mt-2 text-xs leading-5 text-[var(--muted)]">
-        {fileMeta ? `${fileMeta}. ` : ""}Разрешены: {allowedUploadExtensionsLabel}. До {maxUploadSizeLabel}.
+        Разрешены: {allowedUploadExtensionsLabel}. До {maxUploadSizeLabel}.
       </p>
     </div>
   );

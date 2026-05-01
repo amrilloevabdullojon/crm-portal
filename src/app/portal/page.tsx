@@ -15,6 +15,20 @@ const moduleTone: Record<ModuleStatus, "neutral" | "info" | "success" | "warning
   accepted: "success",
 };
 
+const moduleAccentClass: Record<ModuleStatus, string> = {
+  collection: "border-l-slate-300",
+  review: "border-l-[var(--primary)]",
+  needs_revision: "border-l-[var(--warning)]",
+  accepted: "border-l-[var(--success)]",
+};
+
+const moduleSurfaceClass: Record<ModuleStatus, string> = {
+  collection: "bg-white",
+  review: "bg-blue-50/45",
+  needs_revision: "bg-amber-50/60",
+  accepted: "bg-emerald-50/50",
+};
+
 type ModuleFilter = "all" | "actions" | "review" | "accepted";
 
 const moduleFilters: Array<{ label: string; value: ModuleFilter }> = [
@@ -45,6 +59,17 @@ function formatFileSize(bytes?: number | null) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
+function pluralRu(value: number, one: string, few: string, many: string) {
+  const absValue = Math.abs(value);
+  const lastTwo = absValue % 100;
+  const last = absValue % 10;
+
+  if (lastTwo >= 11 && lastTwo <= 14) return many;
+  if (last === 1) return one;
+  if (last >= 2 && last <= 4) return few;
+  return many;
+}
+
 function getCurrentFile(module: PortalModule) {
   return module.currentFile ?? module.files?.find((file) => file.isCurrent) ?? module.files?.[0];
 }
@@ -66,6 +91,46 @@ function getActionTitle(module: PortalModule) {
 
 function needsClientAction(module: PortalModule) {
   return module.status === "needs_revision" || (module.status === "collection" && !getCurrentFile(module));
+}
+
+function getPortalNextAction({
+  progress,
+  reviewCount,
+  uploadNeededCount,
+}: {
+  progress: number;
+  reviewCount: number;
+  uploadNeededCount: number;
+}) {
+  if (uploadNeededCount > 0) {
+    return {
+      title: `${uploadNeededCount} ${pluralRu(uploadNeededCount, "модуль требует", "модуля требуют", "модулей требуют")} действия`,
+      description: "Откройте первый блок из списка и загрузите актуальную версию файла.",
+      tone: "warning" as const,
+    };
+  }
+
+  if (reviewCount > 0) {
+    return {
+      title: "Файлы на проверке",
+      description: "Сейчас очередь на стороне DMED. Статус обновится после проверки менеджером.",
+      tone: "info" as const,
+    };
+  }
+
+  if (progress === 100) {
+    return {
+      title: "Сбор завершен",
+      description: "Все блоки приняты. Актуальные файлы доступны в папке клиники.",
+      tone: "success" as const,
+    };
+  }
+
+  return {
+    title: "Нет срочных действий",
+    description: "Проверьте список модулей ниже и загрузите файлы, когда они будут готовы.",
+    tone: "neutral" as const,
+  };
 }
 
 function matchesModuleFilter(module: PortalModule, filter: ModuleFilter) {
@@ -144,37 +209,62 @@ export default async function PortalPage({
     .filter((module) => needsClientAction(module))
     .slice(0, 4);
   const visibleModules = clinic.modules.filter((module) => matchesModuleFilter(module, moduleFilter));
+  const portalNextAction = getPortalNextAction({ progress, reviewCount, uploadNeededCount });
 
   return (
     <PageShell>
       <div className="flex flex-col gap-6">
-        <header className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div>
+        <header className="overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface)] shadow-sm">
+          <div className="grid gap-6 p-5 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+            <div className="min-w-0">
               <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--muted)]">Кабинет клиники</div>
               <h1 className="mt-1 text-3xl font-semibold tracking-tight">{clinic.name}</h1>
               <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
                 Следите за статусами модулей, загружайте актуальные файлы и отвечайте на комментарии менеджера.
               </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Badge tone="info">{clinicStatuses[clinic.status] ?? clinic.status}</Badge>
+                <Badge tone={portalNextAction.tone}>{portalNextAction.title}</Badge>
+                {sla.active ? <Badge tone={sla.overdue ? "danger" : "info"}>SLA: {sla.overdue ? "просрочен" : `${sla.remainingBusinessDays} раб. дн.`}</Badge> : null}
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {clinic.driveFolderUrl ? (
-                <a
-                  className="inline-flex h-10 items-center justify-center rounded-md border border-[var(--border)] bg-white px-4 text-sm font-semibold transition hover:border-slate-300 hover:bg-slate-50"
-                  href={clinic.driveFolderUrl}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  Папка файлов
-                </a>
-              ) : null}
-              {session.role === "admin" || session.role === "manager" ? <ButtonLink href="/admin">Админка</ButtonLink> : null}
-              <LogoutButton />
-            </div>
+            <aside className={`border-l-4 px-4 py-1 ${portalNextAction.tone === "warning" ? "border-l-[var(--warning)]" : portalNextAction.tone === "success" ? "border-l-[var(--success)]" : portalNextAction.tone === "info" ? "border-l-[var(--primary)]" : "border-l-slate-300"}`}>
+              <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--muted)]">Следующий шаг</div>
+              <div className="mt-2 text-lg font-semibold">{portalNextAction.title}</div>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{portalNextAction.description}</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {actionModules[0] ? (
+                  <a
+                    className="inline-flex h-10 items-center justify-center whitespace-nowrap rounded-md bg-[var(--primary)] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)]"
+                    href={`#module-${actionModules[0].id}`}
+                  >
+                    Открыть первый блок
+                  </a>
+                ) : null}
+                {clinic.driveFolderUrl ? (
+                  <a
+                    className="inline-flex h-10 items-center justify-center whitespace-nowrap rounded-md border border-[var(--border)] bg-white px-4 text-sm font-semibold transition hover:border-slate-300 hover:bg-slate-50"
+                    href={clinic.driveFolderUrl}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    Папка файлов
+                  </a>
+                ) : null}
+              </div>
+            </aside>
           </div>
-          <div className="mt-5 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
+          <div className="border-t border-[var(--border)] bg-slate-50/70 px-5 py-4">
+            <div className="mb-2 flex items-center justify-between gap-3 text-sm">
+              <span className="font-semibold">Прогресс принятия</span>
+              <span className="font-semibold text-[var(--muted)]">{acceptedCount}/{clinic.modules.length} модулей</span>
+            </div>
             <ProgressBar value={progress} />
-            <div className="text-sm font-semibold text-[var(--muted)]">{progress}% принято</div>
+            <div className="mt-2 text-xs font-semibold text-[var(--muted)]">{progress}% принято</div>
+          </div>
+          <div className="flex flex-wrap gap-2 border-t border-[var(--border)] px-5 py-4">
+            {session.role === "admin" || session.role === "manager" ? <ButtonLink href="/admin">Админка</ButtonLink> : null}
+            <LogoutButton />
           </div>
         </header>
 
@@ -182,7 +272,7 @@ export default async function PortalPage({
           <StatCard hint={clinicStatuses[clinic.status] ?? clinic.status} label="Статус клиники" tone="info" value={clinic.status === "completed" ? "Готово" : "В работе"} />
           <StatCard hint={`${acceptedCount} из ${clinic.modules.length}`} label="Принято" tone="success" value={acceptedCount} />
           <StatCard hint={revisionCount ? "Нужна реакция" : "Без срочных правок"} label="Правки" tone={revisionCount ? "warning" : "neutral"} value={revisionCount} />
-          <StatCard hint={uploadNeededCount ? "Нужно загрузить" : `${uploadedCount} модулей с файлами`} label="Ожидаем файлы" tone={uploadNeededCount ? "warning" : "neutral"} value={uploadNeededCount} />
+          <StatCard hint={uploadNeededCount ? "Нужно загрузить" : `${uploadedCount} ${pluralRu(uploadedCount, "модуль с файлом", "модуля с файлами", "модулей с файлами")}`} label="Ожидаем файлы" tone={uploadNeededCount ? "warning" : "neutral"} value={uploadNeededCount} />
           <StatCard
             hint={sla.active && sla.dueAt ? `До ${formatDate(sla.dueAt)}` : "Запустится после принятия общей информации"}
             label="SLA"
@@ -198,7 +288,7 @@ export default async function PortalPage({
         ) : null}
         {!revisionCount && reviewCount ? (
           <Notice tone="info">
-            {reviewCount} модулей сейчас на проверке. Когда менеджер примет файл или оставит комментарий, статус обновится здесь.
+            {reviewCount} {pluralRu(reviewCount, "модуль", "модуля", "модулей")} сейчас на проверке. Когда менеджер примет файл или оставит комментарий, статус обновится здесь.
           </Notice>
         ) : null}
         {progress === 100 ? <Notice tone="success">Все модули приняты. Повторная загрузка заблокирована для принятых блоков.</Notice> : null}
@@ -206,14 +296,14 @@ export default async function PortalPage({
         <Panel title="Что сейчас важно">
           <div className="grid gap-3 p-5 md:grid-cols-2 xl:grid-cols-4">
             {actionModules.map((module) => (
-              <div key={module.id} className="rounded-md border border-[var(--border)] bg-slate-50 p-4">
+              <div key={module.id} className={`rounded-md border border-l-4 border-[var(--border)] ${moduleAccentClass[module.status]} bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md`}>
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--muted)]">{getActionTitle(module)}</div>
                   <Badge tone={moduleTone[module.status]}>{moduleStatuses[module.status]}</Badge>
                 </div>
                 <div className="mt-3 text-base font-semibold">{module.name}</div>
                 <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{getModuleHint(module)}</p>
-                <a className="mt-3 inline-flex text-sm font-semibold text-[var(--primary)] hover:text-[var(--primary-dark)]" href={`#module-${module.id}`}>
+                <a className="mt-3 inline-flex text-sm font-semibold text-[var(--primary)] hover:text-[var(--primary-dark)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--primary)]" href={`#module-${module.id}`}>
                   Открыть модуль
                 </a>
               </div>
@@ -249,15 +339,15 @@ export default async function PortalPage({
               ))}
             </div>
           </div>
-          <div className="grid gap-3 border-b border-[var(--border)] bg-slate-50 p-5 md:grid-cols-4">
+          <div className="grid gap-3 border-b border-[var(--border)] bg-slate-50 p-5 sm:grid-cols-2 lg:grid-cols-4">
             {clinic.modules.map((module, index) => (
-              <div key={module.id} className="rounded-md border border-[var(--border)] bg-white px-3 py-3">
+              <a key={module.id} className={`rounded-md border border-l-4 border-[var(--border)] ${moduleAccentClass[module.status]} bg-white px-3 py-3 transition hover:-translate-y-0.5 hover:shadow-sm`} href={`#module-${module.id}`}>
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-xs font-semibold text-[var(--muted)]">Шаг {index + 1}</div>
                   <Badge tone={moduleTone[module.status]}>{moduleStatuses[module.status]}</Badge>
                 </div>
                 <div className="mt-2 truncate text-sm font-semibold">{module.name}</div>
-              </div>
+              </a>
             ))}
           </div>
           <div id="modules" className="scroll-mt-4 divide-y divide-[var(--border)]">
@@ -266,9 +356,9 @@ export default async function PortalPage({
               const files = module.files ?? [];
 
               return (
-                <article key={module.id} id={`module-${module.id}`} className="scroll-mt-4 p-5">
-                  <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-start">
-                    <div>
+                <article key={module.id} id={`module-${module.id}`} className={`scroll-mt-6 border-l-4 ${moduleAccentClass[module.status]} ${moduleSurfaceClass[module.status]} p-5`}>
+                  <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px] lg:items-start">
+                    <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <h2 className="text-lg font-semibold">{module.name}</h2>
                         <Badge tone={moduleTone[module.status]}>{moduleStatuses[module.status]}</Badge>
@@ -282,10 +372,17 @@ export default async function PortalPage({
                         </div>
                       ) : null}
                     </div>
+                    <div className="rounded-md border border-[var(--border)] bg-white/85 px-3 py-3">
+                      <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--muted)]">Состояние</div>
+                      <div className="mt-2 text-sm font-semibold">{getActionTitle(module)}</div>
+                      <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                        {files.length ? `Версий: ${files.length}` : "Файл еще не загружен"}
+                      </p>
+                    </div>
                   </div>
 
                   {currentFile ? (
-                    <div className="mt-4 rounded-md border border-[var(--border)] bg-slate-50 p-4">
+                    <div className="mt-4 rounded-md border border-[var(--border)] bg-white p-4 shadow-sm">
                       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                         <div className="min-w-0">
                           <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--muted)]">Текущий файл</div>
@@ -323,11 +420,19 @@ export default async function PortalPage({
 
                   <div className="mt-4">
                     {module.status === "accepted" ? (
-                      <div className="rounded-md border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm font-semibold text-[var(--success)]">
-                        Модуль принят. Повторная загрузка заблокирована.
+                      <div className="rounded-md border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-semibold text-[var(--success)]">
+                        Принято. Повторная загрузка заблокирована, чтобы не заменить проверенную версию.
                       </div>
                     ) : (
-                      <ModuleFileUploadForm moduleId={module.id} moduleName={module.name} />
+                      <div className="rounded-md border border-dashed border-[var(--border)] bg-white/80 p-4">
+                        <div className="mb-3">
+                          <div className="text-sm font-semibold">Загрузить новую версию</div>
+                          <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                            После отправки блок перейдет на проверку, а старый комментарий менеджера скроется.
+                          </p>
+                        </div>
+                        <ModuleFileUploadForm moduleId={module.id} moduleName={module.name} />
+                      </div>
                     )}
                   </div>
                 </article>
@@ -339,14 +444,15 @@ export default async function PortalPage({
         </Panel>
 
         <Panel title="История действий">
-          <div className="divide-y divide-[var(--border)]">
-            {activityLog.map((activity) => {
+          <div>
+            {activityLog.map((activity, index) => {
               const view = getActivityView(activity);
 
               return (
-                <div key={activity.id} className="grid gap-3 p-5 sm:grid-cols-[auto_1fr_auto] sm:items-start">
-                  <div
-                    className={`mt-1 h-2.5 w-2.5 rounded-full ${
+                <div key={activity.id} className="relative grid gap-3 px-5 py-5 pl-12 sm:grid-cols-[1fr_auto] sm:items-start">
+                  {index < activityLog.length - 1 ? <span className="absolute bottom-0 left-[25px] top-9 w-px bg-[var(--border)]" /> : null}
+                  <span
+                    className={`absolute left-5 top-6 h-2.5 w-2.5 rounded-full ring-4 ring-white ${
                       view.tone === "success"
                         ? "bg-[var(--success)]"
                         : view.tone === "warning"
@@ -358,11 +464,11 @@ export default async function PortalPage({
                     <div className="flex flex-wrap items-center gap-2">
                       <div className="font-semibold">{view.title}</div>
                       {activity.moduleName ? <Badge tone={view.tone}>{activity.moduleName}</Badge> : null}
+                      <Badge tone="neutral">{view.source}</Badge>
                     </div>
                     <p className="mt-1 break-words text-sm leading-6 text-[var(--muted)]">{view.description}</p>
-                    <div className="mt-1 text-xs text-[var(--muted)]">Источник: {view.source}</div>
                   </div>
-                  <time className="text-xs font-semibold text-[var(--muted)]" dateTime={activity.createdAt}>
+                  <time className="text-xs font-semibold text-[var(--muted)] sm:text-right" dateTime={activity.createdAt}>
                     {formatDate(activity.createdAt)}
                   </time>
                 </div>

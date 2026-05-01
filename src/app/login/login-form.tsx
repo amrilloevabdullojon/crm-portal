@@ -122,31 +122,31 @@ export function LoginForm() {
 
   return (
     <form
-      className="space-y-4"
+      className="space-y-5"
       onSubmit={(event) => {
         event.preventDefault();
         if (step === "phone" && canSubmitPhone) void startChallenge();
         if (step === "code" && canSubmitCode) void verifyCode();
       }}
     >
-      <div className="flex items-center gap-2 text-xs font-semibold text-[var(--muted)]">
-        <span className={step === "phone" ? "text-[var(--primary)]" : ""}>Телефон</span>
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 text-xs font-semibold text-[var(--muted)]">
+        <span className={`rounded-md border px-3 py-2 text-center ${step === "phone" ? "border-blue-100 bg-blue-50 text-[var(--primary)]" : "border-[var(--border)] bg-white"}`}>1. Телефон</span>
         <span className="h-px flex-1 bg-[var(--border)]" />
-        <span className={step === "code" ? "text-[var(--primary)]" : ""}>Код</span>
+        <span className={`rounded-md border px-3 py-2 text-center ${step === "code" ? "border-blue-100 bg-blue-50 text-[var(--primary)]" : "border-[var(--border)] bg-white"}`}>2. Код</span>
       </div>
 
       <label className="block">
         <span className="text-sm font-semibold">Телефон</span>
         <input
           autoComplete="tel"
-          className="mt-2 h-12 w-full rounded-md border border-[var(--border)] bg-white px-3 text-base outline-none transition focus:border-[var(--primary)]"
+          className="mt-2 h-12 w-full rounded-md border border-[var(--border)] bg-white px-3 text-base outline-none transition focus:border-[var(--primary)] focus:ring-4 focus:ring-blue-100"
           disabled={step === "code"}
           onChange={(event) => setPhone(event.target.value)}
           placeholder="+998..."
           type="tel"
           value={phone}
         />
-        <span className="mt-2 block text-xs leading-5 text-[var(--muted)]">
+        <span className="mt-2 block rounded-md bg-slate-50 px-3 py-2 text-xs leading-5 text-[var(--muted)]">
           В Telegram номер принимается только через кнопку отправки контакта.
         </span>
       </label>
@@ -156,7 +156,7 @@ export function LoginForm() {
           <span className="text-sm font-semibold">Код из Telegram</span>
           <input
             autoComplete="one-time-code"
-            className="mt-2 h-12 w-full rounded-md border border-[var(--border)] bg-white px-3 text-center font-mono text-xl tracking-[0.18em] outline-none transition focus:border-[var(--primary)]"
+            className="mt-2 h-12 w-full rounded-md border border-[var(--border)] bg-white px-3 text-center font-mono text-xl tracking-[0.18em] outline-none transition focus:border-[var(--primary)] focus:ring-4 focus:ring-blue-100"
             inputMode="numeric"
             maxLength={6}
             onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
@@ -192,7 +192,7 @@ export function LoginForm() {
 
       {step === "phone" ? (
         <button
-          className="h-12 w-full rounded-md bg-[var(--primary)] text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)] disabled:cursor-not-allowed disabled:opacity-60"
+          className="h-12 w-full rounded-md bg-[var(--primary)] text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--primary)] disabled:cursor-not-allowed disabled:opacity-60"
           disabled={!canSubmitPhone}
           type="submit"
         >
@@ -201,14 +201,14 @@ export function LoginForm() {
       ) : (
         <div className="grid gap-3">
           <button
-            className="h-12 w-full rounded-md bg-[var(--primary)] text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)] disabled:cursor-not-allowed disabled:opacity-60"
+            className="h-12 w-full rounded-md bg-[var(--primary)] text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--primary)] disabled:cursor-not-allowed disabled:opacity-60"
             disabled={!canSubmitCode}
             type="submit"
           >
             {loading ? "Проверяем..." : "Войти"}
           </button>
           <button
-            className="h-11 w-full rounded-md border border-[var(--border)] bg-white text-sm font-semibold transition hover:border-slate-300 hover:bg-slate-50"
+            className="h-11 w-full rounded-md border border-[var(--border)] bg-white text-sm font-semibold transition hover:border-slate-300 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--primary)]"
             onClick={() => {
               setStep("phone");
               setChallengeId("");

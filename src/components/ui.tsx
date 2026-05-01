@@ -13,7 +13,7 @@ const toneClasses: Record<Tone, string> = {
 
 export function PageShell({ children, wide = false }: { children: ReactNode; wide?: boolean }) {
   return (
-    <main className="min-h-screen bg-[var(--background)] px-4 py-5 text-[var(--foreground)] sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-[var(--background)] px-4 py-6 text-[var(--foreground)] sm:px-6 sm:py-8 lg:px-8">
       <section className={`mx-auto w-full ${wide ? "max-w-7xl" : "max-w-6xl"}`}>{children}</section>
     </main>
   );
@@ -56,9 +56,9 @@ export function Panel({
   title?: string;
 }) {
   return (
-    <section className={`rounded-lg border border-[var(--border)] bg-[var(--surface)] shadow-sm ${className}`}>
+    <section className={`overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface)] shadow-sm ${className}`}>
       {title || action ? (
-        <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] px-5 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] px-5 py-4">
           {title ? <h2 className="text-base font-semibold">{title}</h2> : <div />}
           {action}
         </div>
@@ -80,7 +80,7 @@ export function StatCard({
   value: ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm">
+    <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md">
       <div className="flex items-center justify-between gap-3">
         <div className="text-sm font-medium text-[var(--muted)]">{label}</div>
         <span className={`h-2.5 w-2.5 rounded-full ${tone === "danger" ? "bg-[var(--danger)]" : tone === "warning" ? "bg-[var(--warning)]" : tone === "success" ? "bg-[var(--success)]" : tone === "info" ? "bg-[var(--primary)]" : "bg-slate-300"}`} />
@@ -93,7 +93,7 @@ export function StatCard({
 
 export function Badge({ children, tone = "neutral" }: { children: ReactNode; tone?: Tone }) {
   return (
-    <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${toneClasses[tone]}`}>
+    <span className={`inline-flex items-center whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold ${toneClasses[tone]}`}>
       {children}
     </span>
   );
@@ -104,7 +104,7 @@ export function ProgressBar({ value }: { value: number }) {
 
   return (
     <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--surface-muted)]">
-      <div className="h-full rounded-full bg-[var(--primary)]" style={{ width: `${safeValue}%` }} />
+      <div className="h-full rounded-full bg-[var(--primary)] transition-all duration-300" style={{ width: `${safeValue}%` }} />
     </div>
   );
 }
@@ -123,7 +123,7 @@ export function Notice({ children, tone = "info" }: { children: ReactNode; tone?
 
 export function TextLink({ children, href }: { children: ReactNode; href: string }) {
   return (
-    <Link className="text-sm font-semibold text-[var(--primary)] transition hover:text-[var(--primary-dark)]" href={href}>
+    <Link className="text-sm font-semibold text-[var(--primary)] transition hover:text-[var(--primary-dark)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--primary)]" href={href}>
       {children}
     </Link>
   );
@@ -142,8 +142,8 @@ export function ButtonLink({
     <Link
       className={
         variant === "primary"
-          ? "inline-flex h-10 items-center justify-center rounded-md bg-[var(--primary)] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)]"
-          : "inline-flex h-10 items-center justify-center rounded-md border border-[var(--border)] bg-white px-4 text-sm font-semibold transition hover:border-slate-300 hover:bg-slate-50"
+          ? "inline-flex h-10 items-center justify-center whitespace-nowrap rounded-md bg-[var(--primary)] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--primary)]"
+          : "inline-flex h-10 items-center justify-center whitespace-nowrap rounded-md border border-[var(--border)] bg-white px-4 text-sm font-semibold transition hover:border-slate-300 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--primary)]"
       }
       href={href}
     >
