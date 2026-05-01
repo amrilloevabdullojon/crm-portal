@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { clinicStatuses, moduleStatuses, type ModuleStatus } from "@/lib/domain";
+import { listActivityLog } from "@/lib/db/activity";
 import { getAdminClinic } from "@/lib/db/admin";
 import {
   acceptModuleAction,
@@ -51,6 +52,7 @@ export default async function AdminClinicPage({ params }: { params: Promise<{ id
 
   const clinic = await getAdminClinic(clinicId);
   if (!clinic) notFound();
+  const activity = await listActivityLog({ clinicId: clinic.id, limit: 20 });
   const acceptedCount = clinic.modules.filter((module) => module.status === "accepted").length;
   const reviewCount = clinic.modules.filter((module) => module.status === "review").length;
   const revisionCount = clinic.modules.filter((module) => module.status === "needs_revision").length;
@@ -86,6 +88,7 @@ export default async function AdminClinicPage({ params }: { params: Promise<{ id
                   Папка Drive
                 </a>
               ) : null}
+              {session.role === "admin" ? <ButtonLink href="/admin/users">Пользователи</ButtonLink> : null}
               <ButtonLink href="/admin/events">События</ButtonLink>
               <LogoutButton />
             </div>
@@ -254,6 +257,26 @@ export default async function AdminClinicPage({ params }: { params: Promise<{ id
             </div>
           </Panel>
         </div>
+
+        <Panel title="История действий">
+          <div className="divide-y divide-[var(--border)]">
+            {activity.map((event) => (
+              <div key={event.id} className="grid gap-2 p-4 text-sm md:grid-cols-[160px_1fr_auto] md:items-start">
+                <div className="font-mono text-xs text-[var(--muted)]">{formatDate(event.createdAt)}</div>
+                <div>
+                  <div className="font-semibold">{event.action}</div>
+                  <div className="mt-1 text-[var(--muted)]">
+                    {[event.actorName, event.moduleName].filter(Boolean).join(" · ") || "Системное событие"}
+                  </div>
+                </div>
+                <div className="max-w-md truncate font-mono text-xs text-[var(--muted)]">
+                  {Object.keys(event.details).length > 0 ? JSON.stringify(event.details) : ""}
+                </div>
+              </div>
+            ))}
+            {activity.length === 0 ? <EmptyState>Истории действий пока нет.</EmptyState> : null}
+          </div>
+        </Panel>
       </div>
     </PageShell>
   );

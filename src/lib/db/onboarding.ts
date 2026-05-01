@@ -29,22 +29,48 @@ export async function getClinicByAmoDealId(amoDealId: number) {
   return data;
 }
 
-export async function createClinicFromAmo(input: CreateClinicFromAmoInput) {
+export async function syncClinicFromAmo(input: CreateClinicFromAmoInput) {
   const supabase = getSupabaseAdminClient();
+  const existingClinic = await getClinicByAmoDealId(input.amoDealId);
+  let clinic: { id: number; name: string };
 
-  const { data: clinic, error: clinicError } = await supabase
-    .from("clinics")
-    .insert({
+  if (existingClinic) {
+    const patch: Record<string, string | null> = {
       name: input.name,
-      amo_deal_id: input.amoDealId,
-      status: "data_collection",
-      drive_folder_url: input.driveFolderUrl ?? null,
-    })
-    .select("id,name")
-    .single<{ id: number; name: string }>();
+      updated_at: new Date().toISOString(),
+    };
 
-  if (clinicError) {
-    throw new Error(`Clinic create failed: ${clinicError.message}`);
+    if (input.driveFolderUrl) patch.drive_folder_url = input.driveFolderUrl;
+
+    const { data: updatedClinic, error: updateError } = await supabase
+      .from("clinics")
+      .update(patch)
+      .eq("id", existingClinic.id)
+      .select("id,name")
+      .single<{ id: number; name: string }>();
+
+    if (updateError || !updatedClinic) {
+      throw new Error(`Clinic update failed: ${updateError?.message}`);
+    }
+
+    clinic = updatedClinic;
+  } else {
+    const { data: createdClinic, error: clinicError } = await supabase
+      .from("clinics")
+      .insert({
+        name: input.name,
+        amo_deal_id: input.amoDealId,
+        status: "data_collection",
+        drive_folder_url: input.driveFolderUrl ?? null,
+      })
+      .select("id,name")
+      .single<{ id: number; name: string }>();
+
+    if (clinicError || !createdClinic) {
+      throw new Error(`Clinic create failed: ${clinicError?.message}`);
+    }
+
+    clinic = createdClinic;
   }
 
   for (const moduleName of input.modules) {
@@ -76,13 +102,27 @@ export async function createClinicFromAmo(input: CreateClinicFromAmoInput) {
   for (const contact of input.contacts) {
     if (!contact.phone) continue;
 
+    const { data: existingUser, error: existingUserError } = await supabase
+      .from("users")
+      .select("id,role")
+      .eq("phone", contact.phone)
+      .maybeSingle<{ id: number; role: string }>();
+
+    if (existingUserError) {
+      throw new Error(`Existing user lookup failed for ${contact.phone}: ${existingUserError.message}`);
+    }
+
+    const nextRole =
+      existingUser?.role === "admin" || existingUser?.role === "manager"
+        ? existingUser.role
+        : normalizeUserRole(contact.role);
     const { data: user, error: userError } = await supabase
       .from("users")
       .upsert(
         {
           phone: contact.phone,
           name: contact.name || contact.phone,
-          role: normalizeUserRole(contact.role),
+          role: nextRole,
           is_active: true,
         },
         { onConflict: "phone" },
@@ -110,7 +150,7 @@ export async function createClinicFromAmo(input: CreateClinicFromAmoInput) {
 
   await supabase.from("activity_log").insert({
     clinic_id: clinic.id,
-    action: "clinic.created_from_amo",
+    action: existingClinic ? "clinic.synced_from_amo" : "clinic.created_from_amo",
     details: {
       amoDealId: input.amoDealId,
       modules: input.modules,
@@ -123,5 +163,14 @@ export async function createClinicFromAmo(input: CreateClinicFromAmoInput) {
     },
   });
 
-  return clinic;
+  return {
+    ...clinic,
+    created: !existingClinic,
+    contactsSynced: input.contacts.filter((contact) => contact.phone).length,
+    modulesSynced: input.modules.length,
+  };
+}
+
+export async function createClinicFromAmo(input: CreateClinicFromAmoInput) {
+  return syncClinicFromAmo(input);
 }

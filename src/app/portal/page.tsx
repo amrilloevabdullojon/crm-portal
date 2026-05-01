@@ -40,7 +40,7 @@ export default async function PortalPage() {
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <ButtonLink href="/admin">Админка</ButtonLink>
+              {session.role === "admin" || session.role === "manager" ? <ButtonLink href="/admin">Админка</ButtonLink> : null}
               <LogoutButton />
             </div>
           </div>
@@ -58,6 +58,17 @@ export default async function PortalPage() {
         </div>
 
         <Panel title="Модули внедрения">
+          <div className="grid gap-3 border-b border-[var(--border)] bg-slate-50 p-5 md:grid-cols-4">
+            {clinic.modules.map((module, index) => (
+              <div key={module.id} className="rounded-md border border-[var(--border)] bg-white px-3 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-xs font-semibold text-[var(--muted)]">Шаг {index + 1}</div>
+                  <Badge tone={moduleTone[module.status]}>{moduleStatuses[module.status]}</Badge>
+                </div>
+                <div className="mt-2 truncate text-sm font-semibold">{module.name}</div>
+              </div>
+            ))}
+          </div>
           <div className="divide-y divide-[var(--border)]">
             {clinic.modules.map((module) => (
               <article key={module.id} className="p-5">
@@ -68,9 +79,10 @@ export default async function PortalPage() {
                       <Badge tone={moduleTone[module.status]}>{moduleStatuses[module.status]}</Badge>
                     </div>
                     {module.managerComment ? (
-                      <p className="mt-3 rounded-md border border-amber-100 bg-amber-50 px-3 py-2 text-sm leading-6 text-[var(--warning)]">
-                        {module.managerComment}
-                      </p>
+                      <div className="mt-3 rounded-md border border-amber-100 bg-amber-50 px-3 py-2">
+                        <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--warning)]">Комментарий менеджера</div>
+                        <p className="mt-1 text-sm leading-6 text-[var(--warning)]">{module.managerComment}</p>
+                      </div>
                     ) : null}
                     <p className="mt-2 text-sm text-[var(--muted)]">
                       {module.status === "accepted"

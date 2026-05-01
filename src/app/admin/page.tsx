@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { clinicStatuses, moduleStatuses, type ModuleStatus } from "@/lib/domain";
 import { listAdminClinics, listIntegrationEvents, type IntegrationEventRow } from "@/lib/db/admin";
-import { acceptModuleAction, requestRevisionAction } from "@/app/admin/actions";
+import { acceptModuleAction, requestRevisionAction, syncAmoDealAction } from "@/app/admin/actions";
 import { getSession } from "@/lib/auth/session";
 import { getSlaSummary } from "@/lib/sla";
 import { LogoutButton } from "@/components/logout-button";
@@ -30,7 +30,24 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
-export default async function AdminPage() {
+function isGeneralInfoName(name: string) {
+  const normalized = name.toLowerCase();
+  return normalized.includes("общ") || normalized.includes("general");
+}
+
+function isReviewOver24h(module: { name: string; status: ModuleStatus; files: Array<{ createdAt: string }> }) {
+  if (!isGeneralInfoName(module.name) || module.status !== "review") return false;
+  const latestFile = module.files[0];
+  if (!latestFile) return false;
+
+  return Date.now() - new Date(latestFile.createdAt).getTime() > 24 * 60 * 60 * 1000;
+}
+
+export default async function AdminPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const session = await getSession();
 
   if (!session) {
@@ -41,7 +58,24 @@ export default async function AdminPage() {
     redirect("/portal");
   }
 
-  const [clinics, events] = await Promise.all([listAdminClinics(), listIntegrationEvents(12)]);
+  const params = await searchParams;
+  const query = String(params.q ?? "").trim().toLowerCase();
+  const moduleStatus = String(params.moduleStatus ?? "all");
+  const slaFilter = String(params.sla ?? "all");
+  const [allClinics, events] = await Promise.all([listAdminClinics(), listIntegrationEvents(12)]);
+  const clinics = allClinics.filter((clinic) => {
+    const matchesQuery =
+      !query ||
+      clinic.name.toLowerCase().includes(query) ||
+      String(clinic.amoDealId ?? "").includes(query) ||
+      clinic.users.some((user) => user.phone.includes(query) || user.name.toLowerCase().includes(query));
+    const matchesModule =
+      moduleStatus === "all" || clinic.modules.some((module) => module.status === moduleStatus);
+    const sla = getSlaSummary(clinic.slaStartedAt);
+    const matchesSla = slaFilter === "all" || (slaFilter === "active" && sla.active) || (slaFilter === "overdue" && sla.overdue);
+
+    return matchesQuery && matchesModule && matchesSla;
+  });
   const reviewItems = clinics.flatMap((clinic) =>
     clinic.modules
       .filter((module) => module.status === "review" || module.status === "needs_revision")
@@ -64,6 +98,7 @@ export default async function AdminPage() {
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
+              {session.role === "admin" ? <ButtonLink href="/admin/users">Пользователи</ButtonLink> : null}
               <ButtonLink href="/portal">Портал</ButtonLink>
               <ButtonLink href="/admin/events">События</ButtonLink>
               <LogoutButton />
@@ -72,12 +107,54 @@ export default async function AdminPage() {
         </header>
 
         <div className="grid gap-4 md:grid-cols-5">
-          <StatCard hint="Всего в системе" label="Клиники" tone="info" value={clinics.length} />
+          <StatCard hint={`Показано ${clinics.length} из ${allClinics.length}`} label="Клиники" tone="info" value={clinics.length} />
           <StatCard hint="Ожидают решения" label="На проверке" tone={reviewItems.length ? "warning" : "neutral"} value={reviewItems.length} />
           <StatCard hint="Контакты с кодами входа" label="Telegram привязан" tone="success" value={linkedUsers} />
           <StatCard hint="5 рабочих дней" label="SLA активны" tone={activeSla ? "info" : "neutral"} value={activeSla} />
           <StatCard hint="За последние события" label="Ошибки интеграций" tone={failedEvents ? "danger" : "neutral"} value={failedEvents} />
         </div>
+
+        <Panel title="Быстрые действия">
+          <div className="grid gap-4 p-5 lg:grid-cols-[1.1fr_0.9fr]">
+            <form action="/admin" className="grid gap-3 rounded-md border border-[var(--border)] bg-slate-50 p-4 md:grid-cols-[1fr_0.8fr_0.8fr_auto] md:items-end">
+              <label className="block">
+                <span className="text-sm font-semibold">Поиск</span>
+                <input className="mt-2 h-10 w-full rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]" defaultValue={String(params.q ?? "")} name="q" placeholder="Клиника, телефон, amo id" />
+              </label>
+              <label className="block">
+                <span className="text-sm font-semibold">Модуль</span>
+                <select className="mt-2 h-10 w-full rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]" defaultValue={moduleStatus} name="moduleStatus">
+                  <option value="all">Все</option>
+                  <option value="collection">Сбор</option>
+                  <option value="review">На проверке</option>
+                  <option value="needs_revision">Правки</option>
+                  <option value="accepted">Принято</option>
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-sm font-semibold">SLA</span>
+                <select className="mt-2 h-10 w-full rounded-md border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]" defaultValue={slaFilter} name="sla">
+                  <option value="all">Все</option>
+                  <option value="active">Активный</option>
+                  <option value="overdue">Просрочен</option>
+                </select>
+              </label>
+              <button className="h-10 rounded-md border border-[var(--border)] bg-white px-4 text-sm font-semibold transition hover:bg-slate-50" type="submit">
+                Фильтр
+              </button>
+            </form>
+
+            <form action={syncAmoDealAction} className="grid gap-3 rounded-md border border-blue-100 bg-blue-50 p-4 md:grid-cols-[1fr_auto] md:items-end">
+              <label className="block">
+                <span className="text-sm font-semibold">Синхронизировать сделку amoCRM</span>
+                <input className="mt-2 h-10 w-full rounded-md border border-blue-100 bg-white px-3 font-mono text-sm outline-none focus:border-[var(--primary)]" name="dealId" placeholder="amo deal id" required />
+              </label>
+              <button className="h-10 rounded-md bg-[var(--primary)] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)]" type="submit">
+                Sync
+              </button>
+            </form>
+          </div>
+        </Panel>
 
         <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
           <Panel title="Клиники">
@@ -170,6 +247,7 @@ export default async function AdminPage() {
                   <div className="mt-1 font-semibold">{module.name}</div>
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     <Badge tone={moduleStatusTone[module.status]}>{moduleStatuses[module.status]}</Badge>
+                    {isReviewOver24h(module) ? <Badge tone="danger">Общая информация &gt; 24ч</Badge> : null}
                     {module.files[0]?.fileUrl ? (
                       <a className="text-sm font-semibold text-[var(--primary)]" href={module.files[0].fileUrl} rel="noreferrer" target="_blank">
                         Открыть файл

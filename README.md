@@ -119,6 +119,7 @@ Admin users can use:
 
 - `/admin` for clinic overview, module queue, and recent events;
 - `/admin/clinics/<id>` for clinic contacts, files, and module actions;
+- `/admin/users` for adding clients/managers, changing roles, unlinking Telegram, and clinic access;
 - `/admin/events` for integration monitoring;
 - `/api/admin/events` for the same event list as JSON.
 
@@ -126,6 +127,8 @@ The clinic page also contains the admin handoff actions:
 
 - `Выдать доступы` sends an urgent Slack request after `Общая информация` is accepted;
 - `Отправить настройку` sends the final setup request after all modules are accepted.
+
+Managers can also manually sync an amoCRM deal from `/admin`, and retry failed or ignored amoCRM events from `/admin/events`.
 
 ## Useful Commands
 

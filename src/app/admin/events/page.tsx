@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { listIntegrationEvents, type IntegrationEventRow } from "@/lib/db/admin";
+import { retryIntegrationEventAction } from "@/app/admin/actions";
 import { getSession } from "@/lib/auth/session";
 import { LogoutButton } from "@/components/logout-button";
 import { Badge, ButtonLink, EmptyState, PageShell, Panel, StatCard, TextLink } from "@/components/ui";
@@ -74,6 +75,7 @@ export default async function AdminEventsPage() {
                   <th className="px-5 py-3 font-medium">External ID</th>
                   <th className="hidden px-5 py-3 font-medium md:table-cell">Error</th>
                   <th className="hidden px-5 py-3 font-medium sm:table-cell">Created</th>
+                  <th className="px-5 py-3 font-medium">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
@@ -89,11 +91,23 @@ export default async function AdminEventsPage() {
                       {event.errorMessage ? <span className="line-clamp-2">{event.errorMessage}</span> : "—"}
                     </td>
                     <td className="hidden px-5 py-4 text-[var(--muted)] sm:table-cell">{formatDate(event.createdAt)}</td>
+                    <td className="px-5 py-4">
+                      {event.provider === "amo" && event.status !== "processed" ? (
+                        <form action={retryIntegrationEventAction}>
+                          <input name="eventId" type="hidden" value={event.id} />
+                          <button className="h-9 rounded-md border border-[var(--border)] bg-white px-3 text-xs font-semibold transition hover:bg-slate-50" type="submit">
+                            Повторить
+                          </button>
+                        </form>
+                      ) : (
+                        <span className="text-xs text-[var(--muted)]">—</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
                 {events.length === 0 ? (
                   <tr>
-                    <td className="px-5 py-8 text-center text-[var(--muted)]" colSpan={6}>
+                    <td className="px-5 py-8 text-center text-[var(--muted)]" colSpan={7}>
                       <EmptyState>Событий пока нет.</EmptyState>
                     </td>
                   </tr>

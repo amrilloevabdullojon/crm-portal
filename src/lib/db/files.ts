@@ -1,6 +1,8 @@
 import type { ModuleStatus } from "@/lib/domain";
+import { createAmoLeadNote } from "@/lib/amocrm/notes";
 import { getSupabaseAdminClient, hasSupabaseAdminConfig } from "@/lib/db/supabase";
 import { updateModuleStatus, logModuleActivity } from "@/lib/db/modules";
+import { notifyManagers } from "@/lib/notifications";
 import { sampleClinic } from "@/lib/sample-data";
 
 export type ModuleUploadContext = {
@@ -10,6 +12,7 @@ export type ModuleUploadContext = {
   moduleName: string;
   nextVersion: number;
   status: ModuleStatus;
+  amoDealId?: number | null;
 };
 
 export type RecordModuleUploadInput = ModuleUploadContext & {
@@ -26,7 +29,7 @@ type ModuleContextRow = {
   name: string;
   clinic_id: number;
   status: ModuleStatus;
-  clinics: { id: number; name: string } | { id: number; name: string }[] | null;
+  clinics: { id: number; name: string; amo_deal_id: number | null } | { id: number; name: string; amo_deal_id: number | null }[] | null;
 };
 
 export async function getModuleUploadContext(moduleId: number): Promise<ModuleUploadContext | null> {
@@ -42,13 +45,14 @@ export async function getModuleUploadContext(moduleId: number): Promise<ModuleUp
       moduleName: portalModule.name,
       nextVersion: 1,
       status: portalModule.status,
+      amoDealId: null,
     };
   }
 
   const supabase = getSupabaseAdminClient();
   const { data, error } = await supabase
     .from("clinic_modules")
-    .select("id,name,clinic_id,status,clinics(id,name),uploaded_files(id)")
+    .select("id,name,clinic_id,status,clinics(id,name,amo_deal_id),uploaded_files(id)")
     .eq("id", moduleId)
     .single<ModuleContextRow & { uploaded_files?: { id: number }[] | null }>();
 
@@ -68,6 +72,7 @@ export async function getModuleUploadContext(moduleId: number): Promise<ModuleUp
     moduleName: data.name,
     nextVersion: (data.uploaded_files?.length ?? 0) + 1,
     status: data.status,
+    amoDealId: clinic.amo_deal_id,
   };
 }
 
@@ -116,6 +121,20 @@ export async function recordModuleUpload(input: RecordModuleUploadInput) {
       storageFileId: input.storageFileId,
     },
   });
+
+  await notifyManagers({
+    clinicId: input.clinicId,
+    text: `Клиент загрузил файл для проверки: ${input.clinicName} · ${input.moduleName} · ${input.fileName}`,
+  });
+
+  try {
+    await createAmoLeadNote(
+      input.amoDealId,
+      `DMED Portal: клиент загрузил файл для проверки.\nКлиника: ${input.clinicName}\nБлок: ${input.moduleName}\nФайл: ${input.fileName}`,
+    );
+  } catch (error) {
+    console.warn("amoCRM upload note failed:", error);
+  }
 
   return { ok: true, demo: false };
 }

@@ -1,17 +1,11 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
-import { fetchAmoContact, fetchAmoDeal } from "@/lib/amocrm/client";
 import {
   extractAmoWebhookInfo,
   getAmoTargetStatusIds,
-  getEmbeddedContactIds,
-  parseContactFromAmoApi,
-  parseModulesFromAmoDeal,
-  parseWebhookContacts,
 } from "@/lib/amocrm/parser";
-import { createClinicFromAmo, getClinicByAmoDealId } from "@/lib/db/onboarding";
+import { syncAmoDealToPortal } from "@/lib/amocrm/sync";
 import { createIntegrationEvent, updateIntegrationEvent } from "@/lib/db/integration-events";
-import { ensureClinicDriveFolders, hasGoogleDriveConfig } from "@/lib/google-drive/client";
 
 export const runtime = "nodejs";
 
@@ -45,25 +39,6 @@ async function parseWebhookPayload(request: Request) {
 
   const formData = await request.formData();
   return Object.fromEntries(formData.entries()) as Record<string, unknown>;
-}
-
-async function getContacts(payload: Record<string, unknown>, dealData: unknown) {
-  const webhookContacts = parseWebhookContacts(payload).filter((contact) => contact.phone);
-
-  if (webhookContacts.length > 0) return webhookContacts;
-
-  const contacts = [];
-  for (const contactId of getEmbeddedContactIds(dealData)) {
-    try {
-      const contactData = await fetchAmoContact(contactId);
-      const contact = parseContactFromAmoApi(contactData);
-      if (contact) contacts.push(contact);
-    } catch (error) {
-      console.warn(`amoCRM contact fetch failed for ${contactId}:`, error);
-    }
-  }
-
-  return contacts;
 }
 
 export async function GET(request: Request) {
@@ -121,49 +96,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, ignored: true, reason: "invalid_deal_id" });
     }
 
-    const existingClinic = await getClinicByAmoDealId(amoDealId);
-    if (existingClinic) {
-      await updateIntegrationEvent({ id: event.id, status: "ignored", errorMessage: "Clinic already exists." });
-      return NextResponse.json({
-        ok: true,
-        ignored: true,
-        reason: "clinic_exists",
-        clinicId: existingClinic.id,
-      });
-    }
-
-    const dealData = await fetchAmoDeal(webhookInfo.dealId);
-    const deal = dealData as { name?: string } | null;
-    const clinicName = deal?.name || webhookInfo.dealName || `Сделка ${webhookInfo.dealId}`;
-    const modules = parseModulesFromAmoDeal(dealData);
-    const contacts = await getContacts(payload, dealData);
-    let driveFolderUrl: string | null = null;
-
-    if (hasGoogleDriveConfig()) {
-      try {
-        const driveFolders = await ensureClinicDriveFolders(clinicName);
-        driveFolderUrl = driveFolders.clinicFolderUrl;
-      } catch (error) {
-        console.warn("Clinic Drive folder creation failed:", error);
-      }
-    }
-
-    const clinic = await createClinicFromAmo({
-      amoDealId,
-      name: clinicName,
-      modules,
-      contacts,
-      driveFolderUrl,
+    const syncResult = await syncAmoDealToPortal({
+      dealId: amoDealId,
+      writeAmoNote: true,
+      notePrefix: "DMED Portal: сделка обработана webhook-ом.",
     });
 
     await updateIntegrationEvent({ id: event.id, status: "processed" });
 
     return NextResponse.json({
       ok: true,
-      clinic,
-      modules,
-      contactsCreatedOrLinked: contacts.filter((contact) => contact.phone).length,
-      driveFolderUrl,
+      clinic: syncResult.clinic,
+      modules: syncResult.modules,
+      contactsCreatedOrLinked: syncResult.contacts.filter((contact) => contact.phone).length,
+      driveFolderUrl: syncResult.driveFolderUrl,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown amoCRM webhook error.";

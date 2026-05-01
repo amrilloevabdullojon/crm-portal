@@ -87,6 +87,25 @@ function getTelegramBotUsername() {
   return process.env.TELEGRAM_BOT_USERNAME || undefined;
 }
 
+async function isPhoneRateLimited(phone: string) {
+  if (!hasSupabaseAdminConfig()) return false;
+
+  const supabase = getSupabaseAdminClient();
+  const since = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  const { count, error } = await supabase
+    .from("auth_challenges")
+    .select("id", { count: "exact", head: true })
+    .eq("phone", phone)
+    .gte("created_at", since);
+
+  if (error) {
+    console.warn("Auth rate limit query failed:", error.message);
+    return false;
+  }
+
+  return (count ?? 0) >= 5;
+}
+
 export async function startAuthChallenge(rawPhone: string) {
   const phone = normalizePhone(rawPhone);
 
@@ -114,6 +133,14 @@ export async function startAuthChallenge(rawPhone: string) {
       ok: false as const,
       code: "telegram_not_configured",
       error: "Telegram delivery is not configured.",
+    };
+  }
+
+  if (await isPhoneRateLimited(phone)) {
+    return {
+      ok: false as const,
+      code: "rate_limited",
+      error: "Too many code requests. Try again in 10 minutes.",
     };
   }
 

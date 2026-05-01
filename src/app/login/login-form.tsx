@@ -39,6 +39,8 @@ export function LoginForm() {
         setMessage(
           result.code === "telegram_not_linked"
             ? "Telegram не привязан к этому номеру. Откройте бота и отправьте номер через кнопку контакта."
+            : result.code === "rate_limited"
+              ? "Слишком много запросов кода. Попробуйте снова через 10 минут."
             : result.error ?? "Не удалось отправить код.",
         );
         return;

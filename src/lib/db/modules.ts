@@ -1,4 +1,5 @@
 import type { ModuleStatus } from "@/lib/domain";
+import { createAmoLeadNote } from "@/lib/amocrm/notes";
 import { getSupabaseAdminClient, hasSupabaseAdminConfig } from "@/lib/db/supabase";
 import { copyModuleFileToActualFolder, hasGoogleDriveConfig } from "@/lib/google-drive/client";
 import { sendTelegramMessage } from "@/lib/telegram/client";
@@ -14,7 +15,7 @@ type ModuleReviewContext = {
   id: number;
   name: string;
   clinic_id: number;
-  clinics: { id: number; name: string } | { id: number; name: string }[] | null;
+  clinics: { id: number; name: string; amo_deal_id: number | null } | { id: number; name: string; amo_deal_id: number | null }[] | null;
   uploaded_files?: Array<{
     id: number;
     file_name: string;
@@ -49,7 +50,7 @@ async function getModuleReviewContext(moduleId: number) {
       id,
       name,
       clinic_id,
-      clinics(id,name),
+      clinics(id,name,amo_deal_id),
       uploaded_files(
         id,
         file_name,
@@ -207,6 +208,15 @@ export async function acceptModule(input: { moduleId: number; actorUserId?: numb
     `Ваш файл "${context?.name ?? "модуль"}" принят. Спасибо, данные прошли проверку.`,
   );
 
+  try {
+    await createAmoLeadNote(
+      clinic?.amo_deal_id,
+      `DMED Portal: файл принят.\nКлиника: ${clinic?.name ?? "не указана"}\nБлок: ${context?.name ?? "модуль"}\nФайл: ${currentFile?.file_name ?? "не указан"}`,
+    );
+  } catch (error) {
+    console.warn("amoCRM accept note failed:", error);
+  }
+
   return { ok: true, demo: false, actualCopy };
 }
 
@@ -220,6 +230,7 @@ export async function requestModuleRevision(input: {
   }
 
   const context = await getModuleReviewContext(input.moduleId);
+  const clinic = first(context?.clinics);
   const currentFile = context?.uploaded_files?.[0];
 
   await updateModuleStatus({
@@ -256,6 +267,15 @@ export async function requestModuleRevision(input: {
     currentFile?.uploaded_by_user_id,
     `Нужны правки по файлу "${context?.name ?? "модуль"}": ${input.comment}`,
   );
+
+  try {
+    await createAmoLeadNote(
+      clinic?.amo_deal_id,
+      `DMED Portal: нужны правки.\nКлиника: ${clinic?.name ?? "не указана"}\nБлок: ${context?.name ?? "модуль"}\nКомментарий: ${input.comment}`,
+    );
+  } catch (error) {
+    console.warn("amoCRM revision note failed:", error);
+  }
 
   return { ok: true, demo: false };
 }
